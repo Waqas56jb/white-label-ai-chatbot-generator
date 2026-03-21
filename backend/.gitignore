@@ -3,8 +3,5 @@ node_modules
 *.log
 
 # Optional; if committed, it often mismatches developers' Chrome. Default: Selenium Manager downloads a matching driver.
-chromedriver.exe
-chromedriver
 
 # Encrypted chatbot context bundles (user data)
-data/
