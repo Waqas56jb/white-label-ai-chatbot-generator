@@ -1,7 +1,7 @@
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 /**
- * @param {{ systemPrompt: string, history: { role: string, content: string }[], userMessage: string, model?: string }} opts
+ * @param {{ systemPrompt: string, history: { role: string, content: string }[], userMessage: string, model?: string, temperature?: number }} opts
  */
 export async function runChatCompletion(opts) {
   const apiKey = process.env.OPENAI_API_KEY
@@ -9,6 +9,10 @@ export async function runChatCompletion(opts) {
     throw new Error('OPENAI_API_KEY is not set')
   }
   const model = (opts.model || process.env.OPENAI_MODEL || 'gpt-4o-mini').trim()
+  const temperature =
+    typeof opts.temperature === 'number' && Number.isFinite(opts.temperature)
+      ? Math.min(1, Math.max(0, opts.temperature))
+      : 0.4
 
   const messages = [
     { role: 'system', content: opts.systemPrompt },
@@ -24,7 +28,7 @@ export async function runChatCompletion(opts) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.4,
+      temperature,
       max_tokens: 2200,
       messages,
     }),

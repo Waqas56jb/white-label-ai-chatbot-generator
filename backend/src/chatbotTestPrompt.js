@@ -1,5 +1,53 @@
 const MAX_SCRAPE_IN_PROMPT = 72_000
 
+/** Visitor-selectable reply styles (test chat). Invalid IDs fall back to `professional`. */
+export const CHAT_TONE_IDS = Object.freeze([
+  'friendly',
+  'witty',
+  'concise',
+  'professional',
+  'casual',
+  'expert',
+  'empathetic',
+])
+
+const TONE_INSTRUCTIONS = {
+  friendly:
+    'Write like a warm, approachable human who is glad they stopped by. Use welcoming phrasing (“happy to help”, “great question”), mild enthusiasm where natural, and short friendly openers. Stay factual—never cheesy or fake.',
+  witty:
+    'Sprinkle in light, good-natured humor or a clever turn of phrase when it fits—never mean, never at the visitor’s expense. The joke should feel incidental; the help is the point.',
+  concise:
+    'Be ruthlessly brief: answer first in one or two sentences, then at most a tiny bullet list if needed. No throat-clearing (“Sure!”, “I’d be happy to…”), no recap of their question unless necessary.',
+  professional:
+    'Sound like a capable front-desk or office manager: clear, respectful, efficient. Confident but not stiff; no slang.',
+  casual:
+    'Sound like a relaxed teammate at the business: contractions OK, plain words, short paragraphs. Still accurate—no lazy guessing.',
+  expert:
+    'Sound like a senior pro: precise terms, crisp structure, calm confidence. Define jargon only when the visitor seems non-technical.',
+  empathetic:
+    'Lead with acknowledgment if they sound stressed or confused (“Totally get that…”, “That makes sense.”). Then give clear, grounded facts from the knowledge base—warm, not vague.',
+}
+
+/** Slightly higher temperature helps expressive tones; concise/expert stay lower. */
+export function temperatureForChatTone(toneId) {
+  const t = normalizeChatToneId(toneId)
+  const map = {
+    concise: 0.32,
+    professional: 0.42,
+    expert: 0.38,
+    friendly: 0.58,
+    casual: 0.62,
+    witty: 0.68,
+    empathetic: 0.55,
+  }
+  return map[t] ?? 0.42
+}
+
+export function normalizeChatToneId(raw) {
+  const id = typeof raw === 'string' ? raw.trim() : ''
+  return CHAT_TONE_IDS.includes(id) ? id : 'professional'
+}
+
 function hashString(s) {
   let h = 2166136261
   const str = String(s || '')
@@ -65,20 +113,42 @@ export function deriveChatTheme(inner) {
  * @param {object} inner
  * @param {object | null} platformContact — support / provider contact when users ask about the chat platform
  */
-export function buildChatSystemPrompt(inner, platformContact = null) {
+const TONE_LABEL = {
+  friendly: 'Friendly',
+  witty: 'Witty',
+  concise: 'Concise',
+  professional: 'Professional',
+  casual: 'Casual',
+  expert: 'Expert',
+  empathetic: 'Empathetic',
+}
+
+export function buildChatSystemPrompt(inner, platformContact = null, toneId = 'professional') {
+  const tone = normalizeChatToneId(toneId)
   const parts = []
   parts.push(
     `You are the customer-facing chat assistant for this business. Answer clearly and helpfully using ONLY the knowledge below (structured summary, private operator notes if any, and website text).`,
   )
   parts.push(
+    `**CRITICAL — selected reply tone: "${TONE_LABEL[tone]}"** The visitor chose this tone in the chat UI. Every assistant message you write MUST clearly sound like this tone (word choice, rhythm, warmth, humor, or brevity as specified). Do not sound generic or neutral.`,
+  )
+  parts.push(`**How to apply "${TONE_LABEL[tone]}":** ${TONE_INSTRUCTIONS[tone]}`)
+  parts.push(
     `If something is not covered, say you are not sure and suggest how the customer can reach the business (use contact details from the knowledge when present). Do not invent prices, guarantees, or service areas.`,
   )
   parts.push(
-    `When visitors ask who owns the business, how to contact the owner, or for the proprietor’s details, use the **Website owner / registered business contact** section below (if present) and answer in a short, professional tone—offer name, email, and/or phone as given.`,
+    `When visitors ask who owns the business, how to contact the owner, or for the proprietor’s details, use the **Website owner / registered business contact** section below (if present). Share name, email, and/or phone as listed—still in the **"${TONE_LABEL[tone]}"** voice, not a different persona.`,
   )
-  parts.push(
-    `Write answers with enough detail that a first-time visitor understands the context: prefer a short opening sentence, then **bold** labels and bullet or numbered lists when listing skills, services, or multiple facts. Use ### for a section title only when the answer is long. Separate ideas with blank lines. Avoid one-line replies except for simple yes/no. Do not wrap the entire message in a code fence; use normal Markdown only.`,
-  )
+
+  if (tone === 'concise') {
+    parts.push(
+      `**Length & format (Concise mode):** Default to 1–3 short sentences. Use bullets only when listing 3+ items. Skip intros and outros. Markdown **bold** is OK for labels; avoid long sections or ### headings unless the user asks for detail.`,
+    )
+  } else {
+    parts.push(
+      `**Length & format:** Give enough detail that a first-time visitor understands: a short opener in the selected tone, then **bold** labels and bullet or numbered lists when listing multiple services or facts. Use ### only when the answer is long. Separate ideas with blank lines. For simple yes/no, one sentence is fine. Normal Markdown only—no code fences around the whole reply.`,
+    )
+  }
 
   if (platformContact && typeof platformContact === 'object') {
     const pc = platformContact
@@ -127,6 +197,10 @@ export function buildChatSystemPrompt(inner, platformContact = null) {
   const raw = String(inner.scrapedText || '')
   const clipped = raw.length > MAX_SCRAPE_IN_PROMPT ? raw.slice(0, MAX_SCRAPE_IN_PROMPT) + '\n\n[…website text truncated for model context…]' : raw
   parts.push(`\n--- Website visible text (reference) ---\n${clipped}`)
+
+  parts.push(
+    `\n--- Final check before you answer ---\nThe visitor’s chosen tone is **"${TONE_LABEL[tone]}"**. Your next reply must read unmistakably in that style. If your draft sounds flat or like a default chatbot, rewrite it until the tone is obvious.`,
+  )
 
   return parts.join('\n')
 }

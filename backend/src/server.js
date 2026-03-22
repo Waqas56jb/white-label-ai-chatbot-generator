@@ -8,7 +8,12 @@ import { encryptWithPassword, decryptWithPassword } from './encryptContextBundle
 import { allocateNewId, saveRecord, readRecord, deleteRecord } from './chatbotContextStore.js'
 import { registerPasswordLookup, resolveChatbotIdByPassword, usingDefaultPepper } from './passwordLookup.js'
 import { createTestSession, getTestSession, pushExchange } from './chatbotTestSession.js'
-import { deriveChatTheme, buildChatSystemPrompt } from './chatbotTestPrompt.js'
+import {
+  deriveChatTheme,
+  buildChatSystemPrompt,
+  normalizeChatToneId,
+  temperatureForChatTone,
+} from './chatbotTestPrompt.js'
 import { runChatCompletion } from './chatWithOpenAI.js'
 import { saveTrialInquiry } from './trialInquiryStore.js'
 import { isContactMailConfigured, sendContactDemoEmails } from './sendContactDemoEmails.js'
@@ -324,7 +329,7 @@ app.post('/api/chatbot-test/message', async (req, res) => {
   res.setTimeout(120000)
 
   try {
-    const { sessionId, message } = req.body || {}
+    const { sessionId, message, tone } = req.body || {}
     if (!sessionId || typeof sessionId !== 'string') {
       return res.status(400).json({ ok: false, error: 'Missing session' })
     }
@@ -358,13 +363,15 @@ app.post('/api/chatbot-test/message', async (req, res) => {
       })
     }
 
-    const systemPrompt = buildChatSystemPrompt(s.inner, companyContactMeta())
+    const toneId = normalizeChatToneId(tone)
+    const systemPrompt = buildChatSystemPrompt(s.inner, companyContactMeta(), toneId)
     const history = s.history.map((m) => ({ role: m.role, content: m.content }))
 
     const { content: reply, model } = await runChatCompletion({
       systemPrompt,
       history,
       userMessage: userMsg,
+      temperature: temperatureForChatTone(toneId),
     })
 
     pushExchange(s, userMsg, reply)

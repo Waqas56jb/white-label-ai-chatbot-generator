@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { DEFAULT_LANDING_LOGO_CDN } from './brandMark.js'
@@ -344,146 +344,66 @@ function LandingMark({ variant = 'nav' }) {
   )
 }
 
-/** Preset palettes for the personal chat preview (full `colors` shape from the API). */
+/** Preset palettes (red / black / green / white only). */
 const CHAT_THEME_PRESETS = [
   { id: 'server', label: 'Auto' },
   {
-    id: 'ocean',
-    label: 'Ocean',
-    swatch: 'linear-gradient(135deg, hsl(200 58% 34%), hsl(190 70% 42%))',
+    id: 'brand',
+    label: 'Brand',
+    swatch: 'linear-gradient(135deg, #dc2626, #000000)',
     colors: {
-      headerBg: 'hsl(200 58% 32%)',
+      headerBg: '#dc2626',
       headerText: '#ffffff',
-      accent: 'hsl(190 70% 42%)',
-      accentSoft: 'hsl(190 40% 93%)',
-      surface: 'hsl(200 28% 97%)',
-      surfaceBorder: 'hsl(200 18% 88%)',
-      userBubble: 'hsl(190 38% 92%)',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
+      userBubble: '#fee2e2',
       botBubble: '#ffffff',
-      text: 'hsl(210 28% 16%)',
-      textMuted: 'hsl(210 14% 42%)',
-      inputBorder: 'hsl(200 20% 82%)',
-      sendBg: 'hsl(190 58% 40%)',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.18)',
+      sendBg: '#dc2626',
       sendText: '#ffffff',
     },
   },
   {
-    id: 'forest',
-    label: 'Forest',
-    swatch: 'linear-gradient(135deg, hsl(152 50% 30%), hsl(142 55% 38%))',
+    id: 'noir',
+    label: 'Noir',
+    swatch: 'linear-gradient(135deg, #000000, #dc2626)',
     colors: {
-      headerBg: 'hsl(152 50% 28%)',
+      headerBg: '#000000',
       headerText: '#ffffff',
-      accent: 'hsl(142 55% 36%)',
-      accentSoft: 'hsl(142 35% 92%)',
-      surface: 'hsl(145 22% 97%)',
-      surfaceBorder: 'hsl(145 16% 88%)',
-      userBubble: 'hsl(142 32% 91%)',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(0, 0, 0, 0.14)',
+      userBubble: '#fee2e2',
       botBubble: '#ffffff',
-      text: 'hsl(160 26% 14%)',
-      textMuted: 'hsl(155 12% 40%)',
-      inputBorder: 'hsl(145 18% 82%)',
-      sendBg: 'hsl(142 52% 34%)',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.2)',
+      sendBg: '#dc2626',
       sendText: '#ffffff',
     },
   },
   {
-    id: 'sunset',
-    label: 'Sunset',
-    swatch: 'linear-gradient(135deg, hsl(18 70% 40%), hsl(340 65% 48%))',
+    id: 'crimson',
+    label: 'Crimson',
+    swatch: 'linear-gradient(135deg, #991b1b, #000000)',
     colors: {
-      headerBg: 'hsl(18 72% 36%)',
+      headerBg: '#991b1b',
       headerText: '#ffffff',
-      accent: 'hsl(340 65% 48%)',
-      accentSoft: 'hsl(340 40% 94%)',
-      surface: 'hsl(28 32% 98%)',
-      surfaceBorder: 'hsl(25 20% 90%)',
-      userBubble: 'hsl(340 36% 93%)',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(220, 38, 38, 0.22)',
+      userBubble: '#fee2e2',
       botBubble: '#ffffff',
-      text: 'hsl(22 28% 16%)',
-      textMuted: 'hsl(20 14% 42%)',
-      inputBorder: 'hsl(25 22% 84%)',
-      sendBg: 'hsl(340 58% 46%)',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'violet',
-    label: 'Violet',
-    swatch: 'linear-gradient(135deg, hsl(262 52% 38%), hsl(280 60% 50%))',
-    colors: {
-      headerBg: 'hsl(262 52% 34%)',
-      headerText: '#ffffff',
-      accent: 'hsl(280 60% 52%)',
-      accentSoft: 'hsl(280 38% 94%)',
-      surface: 'hsl(270 24% 98%)',
-      surfaceBorder: 'hsl(270 16% 90%)',
-      userBubble: 'hsl(280 32% 93%)',
-      botBubble: '#ffffff',
-      text: 'hsl(265 26% 16%)',
-      textMuted: 'hsl(265 12% 42%)',
-      inputBorder: 'hsl(270 18% 85%)',
-      sendBg: 'hsl(280 54% 48%)',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'slate',
-    label: 'Slate',
-    swatch: 'linear-gradient(135deg, hsl(215 22% 34%), hsl(210 18% 48%))',
-    colors: {
-      headerBg: 'hsl(215 24% 30%)',
-      headerText: '#f8fafc',
-      accent: 'hsl(210 18% 52%)',
-      accentSoft: 'hsl(214 20% 93%)',
-      surface: 'hsl(210 20% 98%)',
-      surfaceBorder: 'hsl(214 16% 88%)',
-      userBubble: 'hsl(214 18% 92%)',
-      botBubble: '#ffffff',
-      text: 'hsl(222 24% 14%)',
-      textMuted: 'hsl(215 12% 42%)',
-      inputBorder: 'hsl(214 14% 82%)',
-      sendBg: 'hsl(215 22% 38%)',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'rose',
-    label: 'Rose',
-    swatch: 'linear-gradient(135deg, hsl(330 45% 36%), hsl(350 70% 52%))',
-    colors: {
-      headerBg: 'hsl(330 48% 32%)',
-      headerText: '#ffffff',
-      accent: 'hsl(350 70% 52%)',
-      accentSoft: 'hsl(350 42% 94%)',
-      surface: 'hsl(330 28% 98%)',
-      surfaceBorder: 'hsl(330 18% 90%)',
-      userBubble: 'hsl(350 34% 93%)',
-      botBubble: '#ffffff',
-      text: 'hsl(330 26% 16%)',
-      textMuted: 'hsl(330 12% 42%)',
-      inputBorder: 'hsl(330 20% 86%)',
-      sendBg: 'hsl(350 62% 48%)',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'midnight',
-    label: 'Midnight',
-    swatch: 'linear-gradient(135deg, hsl(230 45% 22%), hsl(250 50% 48%))',
-    colors: {
-      headerBg: 'hsl(230 48% 18%)',
-      headerText: '#f1f5f9',
-      accent: 'hsl(250 55% 58%)',
-      accentSoft: 'hsl(250 28% 92%)',
-      surface: 'hsl(228 24% 97%)',
-      surfaceBorder: 'hsl(230 16% 88%)',
-      userBubble: 'hsl(250 26% 92%)',
-      botBubble: '#ffffff',
-      text: 'hsl(230 28% 14%)',
-      textMuted: 'hsl(230 12% 42%)',
-      inputBorder: 'hsl(230 14% 82%)',
-      sendBg: 'hsl(250 50% 48%)',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(220, 38, 38, 0.28)',
+      sendBg: '#dc2626',
       sendText: '#ffffff',
     },
   },
@@ -497,19 +417,216 @@ function resolvePersonalChatColors(themeColors, presetId) {
 }
 
 const PERSONAL_CHAT_COLOR_DEFAULTS = {
-  headerBg: '#0b4f8c',
+  headerBg: '#171717',
   headerText: '#ffffff',
-  accent: '#1a73c6',
-  accentSoft: '#e3f0ff',
-  surface: '#f4f9ff',
-  surfaceBorder: 'rgba(11, 79, 140, 0.14)',
-  userBubble: '#e3f0ff',
+  accent: '#dc2626',
+  accentSoft: '#fee2e2',
+  surface: '#ffffff',
+  surfaceBorder: 'rgba(0, 0, 0, 0.14)',
+  userBubble: '#fee2e2',
   botBubble: '#ffffff',
-  text: '#102a43',
-  textMuted: '#4a5f78',
-  inputBorder: 'rgba(11, 79, 140, 0.22)',
-  sendBg: '#1a73c6',
+  text: '#000000',
+  textMuted: 'rgba(0, 0, 0, 0.58)',
+  inputBorder: 'rgba(0, 0, 0, 0.22)',
+  sendBg: '#dc2626',
   sendText: '#ffffff',
+}
+
+const CHAT_DOCK_COLOR_STORAGE_KEY = 'sitemind_chat_dock_color_preset'
+const CHAT_DOCK_TONE_STORAGE_KEY = 'sitemind_chat_dock_tone'
+const CHAT_DOCK_DEFAULT_TONE_ID = 'professional'
+
+/** Seven red / black / white dock themes (merged over the server chatbot palette). */
+const CHAT_DOCK_COLOR_PRESETS = [
+  {
+    id: 'ember',
+    label: 'Ember',
+    swatch: 'linear-gradient(135deg,#dc2626,#1a0505)',
+    colors: {
+      headerBg: '#dc2626',
+      headerText: '#ffffff',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
+      userBubble: '#fee2e2',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.18)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'noir',
+    label: 'Noir',
+    swatch: 'linear-gradient(135deg,#000000,#dc2626)',
+    colors: {
+      headerBg: '#000000',
+      headerText: '#ffffff',
+      accent: '#dc2626',
+      accentSoft: '#fecaca',
+      surface: '#fafafa',
+      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
+      userBubble: '#e5e5e5',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.2)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'paper',
+    label: 'Paper',
+    swatch: 'linear-gradient(135deg,#ffffff,#fca5a5)',
+    colors: {
+      headerBg: '#ffffff',
+      headerText: '#000000',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#fafafa',
+      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
+      userBubble: '#fee2e2',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.18)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'wine',
+    label: 'Wine',
+    swatch: 'linear-gradient(135deg,#7f1d1d,#000000)',
+    colors: {
+      headerBg: '#7f1d1d',
+      headerText: '#ffffff',
+      accent: '#fecaca',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(127, 29, 29, 0.25)',
+      userBubble: '#fee2e2',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.2)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'graphite',
+    label: 'Graphite',
+    swatch: 'linear-gradient(135deg,#171717,#525252)',
+    colors: {
+      headerBg: '#171717',
+      headerText: '#ffffff',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(0, 0, 0, 0.14)',
+      userBubble: '#f5f5f5',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.22)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'crimson',
+    label: 'Crimson',
+    swatch: 'linear-gradient(135deg,#991b1b,#450a0a)',
+    colors: {
+      headerBg: '#991b1b',
+      headerText: '#ffffff',
+      accent: '#fecaca',
+      accentSoft: '#fee2e2',
+      surface: '#ffffff',
+      surfaceBorder: 'rgba(153, 27, 27, 0.22)',
+      userBubble: '#fee2e2',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.2)',
+      sendBg: '#dc2626',
+      sendText: '#ffffff',
+    },
+  },
+  {
+    id: 'frost',
+    label: 'Frost',
+    swatch: 'linear-gradient(135deg,#f5f5f5,#000000)',
+    colors: {
+      headerBg: '#f5f5f5',
+      headerText: '#000000',
+      accent: '#dc2626',
+      accentSoft: '#fee2e2',
+      surface: '#fafafa',
+      surfaceBorder: 'rgba(0, 0, 0, 0.1)',
+      userBubble: '#fee2e2',
+      botBubble: '#ffffff',
+      text: '#000000',
+      textMuted: 'rgba(0, 0, 0, 0.58)',
+      inputBorder: 'rgba(0, 0, 0, 0.16)',
+      sendBg: '#000000',
+      sendText: '#ffffff',
+    },
+  },
+]
+
+const CHAT_DOCK_TONE_OPTIONS = [
+  { id: 'friendly', label: 'Friendly', hint: 'Warm & approachable' },
+  { id: 'witty', label: 'Witty', hint: 'Clever, never snarky' },
+  { id: 'concise', label: 'Concise', hint: 'Short & direct' },
+  { id: 'professional', label: 'Professional', hint: 'Clear business voice' },
+  { id: 'casual', label: 'Casual', hint: 'Relaxed conversation' },
+  { id: 'expert', label: 'Expert', hint: 'Confident & precise' },
+  { id: 'empathetic', label: 'Empathetic', hint: 'Supportive & gentle' },
+]
+
+function readDockColorPresetId() {
+  try {
+    const v = localStorage.getItem(CHAT_DOCK_COLOR_STORAGE_KEY)
+    if (!v) return ''
+    if (v === 'auto') return ''
+    return CHAT_DOCK_COLOR_PRESETS.some((p) => p.id === v) ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+function readDockToneId() {
+  try {
+    const v = localStorage.getItem(CHAT_DOCK_TONE_STORAGE_KEY)
+    if (v && CHAT_DOCK_TONE_OPTIONS.some((t) => t.id === v)) return v
+  } catch {
+    /* ignore */
+  }
+  return CHAT_DOCK_DEFAULT_TONE_ID
+}
+
+function chatHeaderIsLight(headerBg) {
+  const s = String(headerBg || '').trim()
+  if (!s.startsWith('#')) return false
+  const hex =
+    s.length === 4
+      ? `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`
+      : s.length === 7
+        ? s
+        : ''
+  if (!hex) return false
+  const n = parseInt(hex.slice(1), 16)
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  const L = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+  return L > 0.62
 }
 
 /** Ensures every palette key is set so CSS vars and inline styles never fall back to the wrong theme. */
@@ -1292,11 +1409,126 @@ function DemoChatbotModal({ open, onClose }) {
   )
 }
 
-function TestChatbotModal({ open, onClose }) {
-  const [phase, setPhase] = useState('unlock')
+function TestChatUnlockModal({ open, onClose, onSuccess }) {
   const [password, setPassword] = useState('')
   const [unlockErr, setUnlockErr] = useState('')
   const [unlocking, setUnlocking] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setPassword('')
+      setUnlockErr('')
+      setUnlocking(false)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !unlocking) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose, unlocking])
+
+  const handleUnlock = async (ev) => {
+    ev.preventDefault()
+    setUnlockErr('')
+    if (password.length < 8) {
+      setUnlockErr('Password must be at least 8 characters.')
+      return
+    }
+    setUnlocking(true)
+    try {
+      const res = await fetch(`${CHAT_TEST_BASE}/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        const apiErr = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : ''
+        throw new Error(apiErr || '__OPEN_GENERIC__')
+      }
+      onSuccess({
+        sessionId: data.sessionId,
+        theme: data.theme,
+        trialEndsAt: data.trialEndsAt || '',
+        trialExpired: !!data.trialExpired,
+        companyContact: data.companyContact || null,
+        chatbotId: data.chatbotId || '',
+        serverTime: data.serverTime,
+      })
+    } catch (err) {
+      const m = err instanceof Error ? err.message : ''
+      const fallback = 'Could not open your chatbot. Check your password and try again.'
+      setUnlockErr(m === '__OPEN_GENERIC__' ? fallback : publicErrorMessage(m, fallback))
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="chat-test-modal" role="dialog" aria-modal="true" aria-labelledby="chat-test-title">
+      <button
+        type="button"
+        className="chat-test-modal__backdrop"
+        aria-label="Close dialog"
+        onClick={() => !unlocking && onClose()}
+      />
+      <div className="chat-test-modal__panel">
+        <div className="chat-test-modal__head">
+          <div>
+            <p className="chat-test-modal__eyebrow">Live preview</p>
+            <h2 id="chat-test-title" className="chat-test-modal__title">
+              Test your chatbot
+            </h2>
+            <p className="chat-test-modal__sub">
+              Use the same password you chose when you saved your chatbot. You get a <strong>3-day trial</strong> from your
+              first save. After you sign in, a chat icon appears at the bottom-right of this page — tap it to open your
+              preview.
+            </p>
+          </div>
+          <button type="button" className="chat-test-modal__close" aria-label="Close" onClick={onClose} disabled={unlocking}>
+            ×
+          </button>
+        </div>
+
+        <form className="chat-test-modal__unlock" onSubmit={handleUnlock}>
+          <div className="demo-field">
+            <label className="demo-field__label" htmlFor="test-context-password">
+              Password
+            </label>
+            <input
+              id="test-context-password"
+              className="demo-field__input"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Your saved chatbot password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {unlockErr ? (
+            <p className="chat-test-modal__err" role="alert">
+              {unlockErr}
+            </p>
+          ) : null}
+          <button type="submit" className="btn btn--primary btn--block" disabled={unlocking}>
+            {unlocking ? 'Opening…' : 'Open my chatbot'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Bottom-right floating preview: animated launcher + expandable panel (trial expiry in header).
+ */
+function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSession }) {
   const [sessionId, setSessionId] = useState('')
   const [theme, setTheme] = useState(null)
   const [messages, setMessages] = useState([])
@@ -1319,16 +1551,14 @@ function TestChatbotModal({ open, onClose }) {
   const [iqSubmitting, setIqSubmitting] = useState(false)
   const [iqDone, setIqDone] = useState(false)
   const [iqErr, setIqErr] = useState('')
-  const [chatThemePresetId, setChatThemePresetId] = useState('server')
+  const [colorPresetId, setColorPresetId] = useState(() => readDockColorPresetId())
+  const [toneId, setToneId] = useState(() => readDockToneId())
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const trialEnded = trialExpiredAtOpen || trialRanOut
 
   useEffect(() => {
-    if (!open) {
-      setPhase('unlock')
-      setPassword('')
-      setUnlockErr('')
-      setUnlocking(false)
+    if (!session) {
       setSessionId('')
       setTheme(null)
       setMessages([])
@@ -1349,75 +1579,67 @@ function TestChatbotModal({ open, onClose }) {
       setIqSubmitting(false)
       setIqDone(false)
       setIqErr('')
-      setChatThemePresetId('server')
+      return
     }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => {
-      if (e.key === 'Escape' && !unlocking && !sending && !iqSubmitting) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose, unlocking, sending, iqSubmitting])
+    skewRef.current = session.serverTime ? Date.parse(session.serverTime) - Date.now() : 0
+    setSessionId(session.sessionId)
+    setTheme(session.theme)
+    setTrialEndsAtIso(session.trialEndsAt || '')
+    setTrialExpiredAtOpen(!!session.trialExpired)
+    setTrialRanOut(false)
+    setCompanyContact(session.companyContact || null)
+    setChatbotId(session.chatbotId || '')
+    setMessages([])
+    setDraft('')
+    setChatErr('')
+    setIqDone(false)
+    setIqErr('')
+    setTick(0)
+  }, [session])
 
   useEffect(() => {
     const el = listRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [messages, phase, sending, trialEnded])
+  }, [messages, sending, trialEnded, panelOpen])
 
   useEffect(() => {
-    if (phase !== 'chat' || trialEnded || !trialEndsAtIso) return
+    if (!session || trialEnded || !trialEndsAtIso) return
     const id = setInterval(() => {
       setTick((t) => t + 1)
       const end = Date.parse(trialEndsAtIso)
       if (!Number.isNaN(end) && end - Date.now() - skewRef.current <= 0) setTrialRanOut(true)
     }, 1000)
     return () => clearInterval(id)
-  }, [phase, trialEndsAtIso, trialEnded])
+  }, [session, trialEndsAtIso, trialEnded])
 
-  const handleUnlock = async (ev) => {
-    ev.preventDefault()
-    setUnlockErr('')
-    if (password.length < 8) {
-      setUnlockErr('Password must be at least 8 characters.')
-      return
-    }
-    setUnlocking(true)
-    try {
-      const res = await fetch(`${CHAT_TEST_BASE}/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.ok) {
-        const apiErr = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : ''
-        throw new Error(apiErr || '__OPEN_GENERIC__')
+  useEffect(() => {
+    if (!panelOpen) return
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !sending && !iqSubmitting) {
+        if (settingsOpen) setSettingsOpen(false)
+        else onPanelOpenChange(false)
       }
-      skewRef.current = data.serverTime ? Date.parse(data.serverTime) - Date.now() : 0
-      setSessionId(data.sessionId)
-      setTheme(data.theme)
-      setTrialEndsAtIso(data.trialEndsAt || '')
-      setTrialExpiredAtOpen(!!data.trialExpired)
-      setTrialRanOut(false)
-      setCompanyContact(data.companyContact || null)
-      setChatbotId(data.chatbotId || '')
-      setPassword('')
-      setTick(0)
-      setIqDone(false)
-      setIqErr('')
-      setPhase('chat')
-    } catch (err) {
-      const m = err instanceof Error ? err.message : ''
-      const fallback = 'Could not open your chatbot. Check your password and try again.'
-      setUnlockErr(m === '__OPEN_GENERIC__' ? fallback : publicErrorMessage(m, fallback))
-    } finally {
-      setUnlocking(false)
     }
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [panelOpen, onPanelOpenChange, sending, iqSubmitting, settingsOpen])
+
+  useEffect(() => {
+    if (!panelOpen) setSettingsOpen(false)
+  }, [panelOpen])
+
+  useEffect(() => {
+    if (!settingsOpen || !panelOpen) return
+    const close = (e) => {
+      const t = e.target
+      if (t instanceof Node && t.closest?.('.chat-widget-dock__settings')) return
+      if (t instanceof Node && t.closest?.('.chat-widget-dock__settings-trigger')) return
+      setSettingsOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [settingsOpen, panelOpen])
 
   const handleSend = async (ev) => {
     ev.preventDefault()
@@ -1431,7 +1653,7 @@ function TestChatbotModal({ open, onClose }) {
       const res = await fetch(`${CHAT_TEST_BASE}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: text }),
+        body: JSON.stringify({ sessionId, message: text, tone: toneId }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 403 && data.trialExpired) {
@@ -1492,21 +1714,47 @@ function TestChatbotModal({ open, onClose }) {
   }
 
   const lockToPassword = () => {
-    setPhase('unlock')
-    setSessionId('')
-    setTheme(null)
-    setMessages([])
-    setChatErr('')
-    setTrialEndsAtIso('')
-    setTrialExpiredAtOpen(false)
-    setTrialRanOut(false)
-    setChatThemePresetId('server')
+    onEndSession()
+    onPanelOpenChange(false)
   }
 
-  if (!open) return null
-
   const baseColors = theme?.colors || {}
-  const col = withFullPersonalChatColors(resolvePersonalChatColors(baseColors, chatThemePresetId))
+  const col = useMemo(() => {
+    const serverMerged = withFullPersonalChatColors(resolvePersonalChatColors(baseColors, 'server'))
+    if (!colorPresetId) return serverMerged
+    const preset = CHAT_DOCK_COLOR_PRESETS.find((p) => p.id === colorPresetId)
+    if (!preset) return serverMerged
+    return withFullPersonalChatColors({
+      ...resolvePersonalChatColors(baseColors, 'server'),
+      ...preset.colors,
+    })
+  }, [baseColors, colorPresetId])
+
+  const setDockColorPreset = useCallback((id) => {
+    setColorPresetId(id)
+    try {
+      if (!id) localStorage.removeItem(CHAT_DOCK_COLOR_STORAGE_KEY)
+      else localStorage.setItem(CHAT_DOCK_COLOR_STORAGE_KEY, id)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const setDockTone = useCallback((id) => {
+    setToneId(id)
+    try {
+      localStorage.setItem(CHAT_DOCK_TONE_STORAGE_KEY, id)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  if (!session || !theme) return null
+
+  const siteLabel =
+    (theme.displayHost && String(theme.displayHost).trim()) ||
+    (theme.chatbotName && String(theme.chatbotName).trim()) ||
+    'Chat'
   const endMs = trialEndsAtIso ? Date.parse(trialEndsAtIso) : NaN
   const remMs =
     trialEndsAtIso && !trialExpiredAtOpen && !Number.isNaN(endMs)
@@ -1523,91 +1771,44 @@ function TestChatbotModal({ open, onClose }) {
       ? `linear-gradient(135deg, ${col.headerBg} 0%, color-mix(in srgb, ${col.accent} 58%, ${col.headerBg}) 52%, color-mix(in srgb, ${col.accent} 42%, ${col.headerBg}) 100%)`
       : undefined
 
+  const expiryDateStr =
+    trialEndsAtIso && !Number.isNaN(Date.parse(trialEndsAtIso))
+      ? new Date(trialEndsAtIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+      : '—'
+
+  const fabStyle = {
+    background: col.sendBg || col.headerBg || '#dc2626',
+    color: col.sendText || col.headerText || '#fff',
+  }
+
   return (
-    <div
-      className={`chat-test-modal ${phase === 'chat' ? 'chat-test-modal--personal' : ''}`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="chat-test-title"
-      style={phase === 'chat' && theme ? personalChatThemeStyle(col) : undefined}
-    >
-      {phase === 'unlock' ? (
-        <>
-          <button
-            type="button"
-            className="chat-test-modal__backdrop"
-            aria-label="Close dialog"
-            onClick={() => !unlocking && onClose()}
-          />
-          <div className="chat-test-modal__panel">
-            <div className="chat-test-modal__head">
-              <div>
-                <p className="chat-test-modal__eyebrow">Live preview</p>
-                <h2 id="chat-test-title" className="chat-test-modal__title">
-                  Test your chatbot
-                </h2>
-                <p className="chat-test-modal__sub">
-                  Use the same password you chose when you saved your chatbot. You get a <strong>3-day trial</strong>{' '}
-                  from your first save.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="chat-test-modal__close"
-                aria-label="Close"
-                onClick={onClose}
-                disabled={unlocking}
-              >
-                ×
-              </button>
-            </div>
-
-            <form className="chat-test-modal__unlock" onSubmit={handleUnlock}>
-              <div className="demo-field">
-                <label className="demo-field__label" htmlFor="test-context-password">
-                  Password
-                </label>
-                <input
-                  id="test-context-password"
-                  className="demo-field__input"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Your saved chatbot password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {unlockErr ? (
-                <p className="chat-test-modal__err" role="alert">
-                  {unlockErr}
-                </p>
-              ) : null}
-              <button type="submit" className="btn btn--primary btn--block" disabled={unlocking}>
-                {unlocking ? 'Opening…' : 'Open my chatbot'}
-              </button>
-            </form>
-          </div>
-        </>
-      ) : null}
-
-      {phase === 'chat' && theme ? (
-        <div className="chat-personal">
+    <div className="chat-widget-dock" aria-live="polite">
+      {panelOpen ? (
+        <div
+          className="chat-widget-dock__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Chat with ${theme.chatbotName || 'assistant'}`}
+          style={personalChatThemeStyle(col)}
+        >
+        <div className="chat-personal chat-personal--dock">
           <header
-            className="chat-personal__brand-hero"
+            className="chat-widget-dock__bar"
             style={{
-              background: brandHeroBg,
+              background: brandHeroBg || col.headerBg,
               color: col.headerText,
               ['--brand-hero-fg']: col.headerText,
+              borderBottom: `1px solid color-mix(in srgb, ${col.headerText} 16%, transparent)`,
             }}
           >
-            <div className="chat-personal__brand-hero-toolbar">
+            <div className="chat-widget-dock__bar-main">
               <button
                 type="button"
-                className="chat-personal__close chat-personal__close--on-brand"
-                onClick={onClose}
-                aria-label="Close"
+                className="chat-widget-dock__icon-btn"
+                onClick={() => onPanelOpenChange(false)}
+                aria-label="Minimize chat"
               >
-                <svg className="chat-personal__close-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                   <path
                     d="M6 6l12 12M18 6L6 18"
                     fill="none"
@@ -1617,106 +1818,112 @@ function TestChatbotModal({ open, onClose }) {
                   />
                 </svg>
               </button>
-              <button type="button" className="chat-personal__lock chat-personal__lock--on-brand" onClick={lockToPassword}>
-                Sign out
-              </button>
-            </div>
-            <div className="chat-personal__brand-hero-body">
-              <ChatBrandAvatar logoUrl={theme.logoUrl} chatbotName={theme.chatbotName} variant="onDark" />
-              <div className="chat-personal__brand-hero-text">
-                <p className="chat-personal__brand-hero-kicker">Chat with</p>
-                <h1 className="chat-personal__brand-hero-title">{theme.chatbotName}</h1>
-                {theme.displayHost ? (
-                  <p className="chat-personal__brand-hero-site" title={theme.displayHost}>
-                    <svg className="chat-personal__brand-hero-site-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
-                      />
-                    </svg>
-                    <span className="chat-personal__brand-hero-site-label">{theme.displayHost}</span>
-                  </p>
-                ) : null}
-              </div>
-              <div className="chat-personal__brand-hero-aside">
-                <span className="chat-personal__status chat-personal__status--on-brand">
-                  <span className="chat-personal__status-dot" aria-hidden="true" />
-                  Online
-                </span>
-              </div>
-            </div>
-          </header>
-
-          <div
-            className="chat-personal__meta-bar"
-            style={{
-              background: `color-mix(in srgb, ${col.text} 4.5%, ${col.surface})`,
-              borderBottomColor: col.surfaceBorder,
-            }}
-          >
-            <div className="chat-personal__meta-bar-inner">
-              <div
-                className="chat-personal__countdown"
-                style={{
-                  backgroundColor: col.accentSoft,
-                  borderColor: col.surfaceBorder,
-                  color: col.text,
-                }}
+              <button
+                type="button"
+                className="chat-widget-dock__icon-btn chat-widget-dock__settings-trigger"
+                onClick={() => setSettingsOpen((o) => !o)}
+                aria-expanded={settingsOpen}
+                aria-label="Chat appearance and reply tone"
+                title="Appearance & tone"
               >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96a7.06 7.06 0 0 1-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.42h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22l-1.92 3.32c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.39.3.61.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.48 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"
+                  />
+                </svg>
+              </button>
+              <div className="chat-widget-dock__site" title={siteLabel}>
+                <ChatBrandAvatar
+                  logoUrl={theme.logoUrl}
+                  chatbotName={theme.chatbotName}
+                  variant={chatHeaderIsLight(col.headerBg) ? 'light' : 'onDark'}
+                />
+                <span className="chat-widget-dock__site-name">{siteLabel}</span>
+              </div>
+            </div>
+            <div className="chat-widget-dock__bar-meta">
+              <div className="chat-widget-dock__trial" aria-live="polite">
                 {trialEnded ? (
-                  <span className="chat-personal__countdown-label">Trial ended — reach out below to keep going</span>
+                  <span className="chat-widget-dock__trial-line chat-widget-dock__trial-line--ended">Trial ended</span>
                 ) : (
                   <>
-                    <span className="chat-personal__countdown-label">Trial time left</span>
-                    <span className="chat-personal__countdown-digits" aria-live="polite">
-                      <span>
-                        <strong>{cdDays}</strong>d
-                      </span>
-                      <span>
-                        <strong>{cdHours}</strong>h
-                      </span>
-                      <span>
-                        <strong>{cdMins}</strong>m
-                      </span>
-                      <span>
-                        <strong>{cdSecs}</strong>s
-                      </span>
+                    <span className="chat-widget-dock__trial-line chat-widget-dock__trial-line--muted">
+                      Until {expiryDateStr}
+                    </span>
+                    <span className="chat-widget-dock__trial-line chat-widget-dock__trial-line--strong">
+                      {cdDays}d {cdHours}h {cdMins}m {cdSecs}s left
                     </span>
                   </>
                 )}
               </div>
-              <div className="chat-personal__themes-wrap">
-                <span className="chat-personal__themes-label" id="chat-theme-presets-label">
-                  Appearance
-                </span>
-                <div className="chat-personal__themes" role="toolbar" aria-labelledby="chat-theme-presets-label">
-                  {CHAT_THEME_PRESETS.map((p) => {
-                    const isAuto = p.id === 'server'
-                    const swatchStyle =
-                      isAuto && baseColors.headerBg && baseColors.accent
-                        ? {
-                            background: `linear-gradient(135deg, ${baseColors.headerBg}, ${baseColors.accent})`,
-                          }
-                        : isAuto
-                          ? { background: 'linear-gradient(135deg, #64748b, #94a3b8)' }
-                          : { background: p.swatch }
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`chat-personal__theme-swatch ${chatThemePresetId === p.id ? 'chat-personal__theme-swatch--active' : ''}`}
-                        style={swatchStyle}
-                        aria-pressed={chatThemePresetId === p.id}
-                        aria-label={p.label}
-                        title={p.label}
-                        onClick={() => setChatThemePresetId(p.id)}
-                      />
-                    )
-                  })}
+              <button type="button" className="chat-widget-dock__signout" onClick={lockToPassword}>
+                Sign out
+              </button>
+            </div>
+          </header>
+
+          {!trialEnded && settingsOpen ? (
+            <div className="chat-widget-dock__settings" role="region" aria-label="Chat appearance and reply tone">
+              <div className="chat-widget-dock__settings-block">
+                <div className="chat-widget-dock__settings-head">
+                  <span className="chat-widget-dock__settings-title">Colors</span>
+                  <span className="chat-widget-dock__settings-hint">Saved on this device</span>
+                </div>
+                <div className="chat-widget-dock__settings-swatches" role="list">
+                  <button
+                    type="button"
+                    className={`chat-widget-dock__swatch chat-widget-dock__swatch--auto${colorPresetId === '' ? ' is-on' : ''}`}
+                    onClick={() => setDockColorPreset('')}
+                    aria-pressed={colorPresetId === ''}
+                    aria-label="Default — use your chatbot’s colors"
+                    title="Default — use your chatbot’s colors"
+                  >
+                    <span className="chat-widget-dock__swatch-auto-label" aria-hidden="true">
+                      A
+                    </span>
+                  </button>
+                  {CHAT_DOCK_COLOR_PRESETS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`chat-widget-dock__swatch${colorPresetId === p.id ? ' is-on' : ''}`}
+                      style={{ background: p.swatch }}
+                      onClick={() => setDockColorPreset(p.id)}
+                      aria-pressed={colorPresetId === p.id}
+                      aria-label={p.label}
+                      title={p.label}
+                    />
+                  ))}
                 </div>
               </div>
+              <div className="chat-widget-dock__settings-block">
+                <div className="chat-widget-dock__settings-head">
+                  <span className="chat-widget-dock__settings-title">Reply tone</span>
+                  <span className="chat-widget-dock__settings-hint">How the bot writes</span>
+                </div>
+                <ul className="chat-widget-dock__tone-list">
+                  {CHAT_DOCK_TONE_OPTIONS.map((t) => (
+                    <li key={t.id}>
+                      <label className="chat-widget-dock__tone-option">
+                        <input
+                          type="radio"
+                          name="sitemind-dock-tone"
+                          value={t.id}
+                          checked={toneId === t.id}
+                          onChange={() => setDockTone(t.id)}
+                        />
+                        <span className="chat-widget-dock__tone-text">
+                          <span className="chat-widget-dock__tone-label">{t.label}</span>
+                          <span className="chat-widget-dock__tone-desc">{t.hint}</span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {trialEnded ? (
             <div className="chat-personal__expired-wrap">
@@ -1861,11 +2068,6 @@ function TestChatbotModal({ open, onClose }) {
             <>
               <div ref={listRef} className="chat-personal__messages">
                 <div className="chat-personal__messages-col">
-                  {messages.length === 0 ? (
-                    <p className="chat-personal__hint">
-                      Try questions your customers would ask — replies follow what you saved from your site.
-                    </p>
-                  ) : null}
                   {messages.map((m, i) => (
                     <div key={`${i}-${m.role}`} className={`chat-personal__row chat-personal__row--${m.role}`}>
                       {m.role === 'assistant' ? <div className="chat-personal__rail" aria-hidden="true" /> : null}
@@ -1966,7 +2168,38 @@ function TestChatbotModal({ open, onClose }) {
             </>
           )}
         </div>
+        </div>
       ) : null}
+
+      <button
+        type="button"
+        className={`chat-widget-dock__fab ${panelOpen ? 'chat-widget-dock__fab--open' : ''}`}
+        style={fabStyle}
+        onClick={() => onPanelOpenChange(!panelOpen)}
+        aria-expanded={panelOpen}
+        aria-label={panelOpen ? 'Close chat panel' : `Open ${theme.chatbotName || 'chat'} preview`}
+        title={panelOpen ? 'Close' : 'Open chat'}
+      >
+        {panelOpen ? (
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.25"
+              strokeLinecap="round"
+            />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"
+            />
+            <path fill="currentColor" d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z" opacity="0.9" />
+          </svg>
+        )}
+      </button>
     </div>
   )
 }
@@ -2008,7 +2241,9 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const [demoModalOpen, setDemoModalOpen] = useState(false)
-  const [testChatbotOpen, setTestChatbotOpen] = useState(false)
+  const [testChatUnlockOpen, setTestChatUnlockOpen] = useState(false)
+  const [testChatSession, setTestChatSession] = useState(null)
+  const [testChatPanelOpen, setTestChatPanelOpen] = useState(false)
   const [contactSending, setContactSending] = useState(false)
   const [contactFeedback, setContactFeedback] = useState(null)
 
@@ -2020,9 +2255,19 @@ export default function LandingPage() {
   const closeDemoModal = useCallback(() => setDemoModalOpen(false), [])
   const openTestChatbot = useCallback(() => {
     setMenuOpen(false)
-    setTestChatbotOpen(true)
+    if (testChatSession) setTestChatPanelOpen(true)
+    else setTestChatUnlockOpen(true)
+  }, [testChatSession])
+  const closeTestChatUnlock = useCallback(() => setTestChatUnlockOpen(false), [])
+  const handleTestChatUnlockSuccess = useCallback((payload) => {
+    setTestChatSession(payload)
+    setTestChatUnlockOpen(false)
+    setTestChatPanelOpen(false)
   }, [])
-  const closeTestChatbot = useCallback(() => setTestChatbotOpen(false), [])
+  const endTestChatSession = useCallback(() => {
+    setTestChatSession(null)
+    setTestChatPanelOpen(false)
+  }, [])
 
   const handleContactDemoSubmit = useCallback(async (e) => {
     e.preventDefault()
@@ -2715,7 +2960,13 @@ export default function LandingPage() {
       </footer>
 
       <DemoChatbotModal open={demoModalOpen} onClose={closeDemoModal} />
-      <TestChatbotModal open={testChatbotOpen} onClose={closeTestChatbot} />
+      <TestChatUnlockModal open={testChatUnlockOpen} onClose={closeTestChatUnlock} onSuccess={handleTestChatUnlockSuccess} />
+      <TestChatFloatingDock
+        session={testChatSession}
+        panelOpen={testChatPanelOpen}
+        onPanelOpenChange={setTestChatPanelOpen}
+        onEndSession={endTestChatSession}
+      />
     </div>
   )
 }
