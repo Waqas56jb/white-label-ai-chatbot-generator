@@ -16,6 +16,7 @@ export function api(path) {
 }
 
 export const ADMIN_API = {
+  login: api('admin/login'),
   metrics: api('admin/metrics'),
   analytics: (days = 14) => api(`admin/analytics?days=${encodeURIComponent(String(days))}`),
   chatbots: (limit = 25) => api(`admin/chatbots?limit=${encodeURIComponent(String(limit))}`),

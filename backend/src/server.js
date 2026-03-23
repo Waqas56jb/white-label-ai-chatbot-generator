@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import crypto from 'crypto'
 import { crawlWebsite } from './scrapeWithSelenium.js'
 import { crawlWebsiteHttp } from './scrapeWithFetch.js'
 import { structureWebsiteForChatbot } from './structureWithOpenAI.js'
@@ -61,6 +62,47 @@ app.use(
   }),
 )
 app.use(express.json({ limit: '15mb' }))
+
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000
+const adminSessions = new Map()
+
+function adminCredentialConfig() {
+  return {
+    email: String(process.env.ADMIN_LOGIN_EMAIL || 'admin@example.com').trim().toLowerCase(),
+    password: String(process.env.ADMIN_LOGIN_PASSWORD || 'admin123').trim(),
+  }
+}
+
+function pruneExpiredAdminSessions() {
+  const now = Date.now()
+  for (const [token, session] of adminSessions.entries()) {
+    if (!session || Number(session.expiresAt || 0) <= now) adminSessions.delete(token)
+  }
+}
+
+function createAdminSession(email) {
+  pruneExpiredAdminSessions()
+  const token = crypto.randomBytes(32).toString('hex')
+  adminSessions.set(token, {
+    email,
+    expiresAt: Date.now() + ADMIN_SESSION_TTL_MS,
+  })
+  return token
+}
+
+function requireAdminAuth(req, res, next) {
+  // Login endpoint is intentionally public.
+  if (req.path === '/login') return next()
+  const raw = String(req.headers.authorization || '')
+  const m = /^Bearer\s+(.+)$/i.exec(raw)
+  const token = m ? String(m[1] || '').trim() : ''
+  if (!token) return res.status(401).json({ ok: false, error: 'Admin login required' })
+  pruneExpiredAdminSessions()
+  const session = adminSessions.get(token)
+  if (!session) return res.status(401).json({ ok: false, error: 'Session expired. Please login again.' })
+  req.adminSession = session
+  return next()
+}
 
 /**
  * Try Selenium crawl first; fall back to HTTP + HTML parse when Chrome/Driver is missing (typical on PaaS).
@@ -613,6 +655,33 @@ app.post('/api/scrape', async (req, res) => {
   }
 })
 
+app.use('/api/admin', requireAdminAuth)
+
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {}
+    const inputEmail = String(email || '').trim().toLowerCase()
+    const inputPassword = String(password || '').trim()
+    if (!inputEmail || !inputPassword) {
+      return res.status(400).json({ ok: false, error: 'Email and password are required' })
+    }
+    const cfg = adminCredentialConfig()
+    if (inputEmail !== cfg.email || inputPassword !== cfg.password) {
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' })
+    }
+    const token = createAdminSession(inputEmail)
+    return res.json({
+      ok: true,
+      token,
+      admin: { email: inputEmail },
+      expiresInMs: ADMIN_SESSION_TTL_MS,
+    })
+  } catch (e) {
+    console.error('[admin/login]', e)
+    return res.status(500).json({ ok: false, error: 'Could not login' })
+  }
+})
+
 app.get('/api/admin/metrics', async (_req, res) => {
   try {
     const pool = getPool()
@@ -924,6 +993,8 @@ app.listen(PORT, async () => {
   )
   console.log('POST /api/trial-inquiry — contact form after trial')
   console.log('POST /api/contact-demo — Request a demo (Nodemailer → owner + submitter)')
+  console.log('POST /api/admin/login — admin email/password login (no signup)')
+  console.log('GET/PUT/DELETE /api/admin/* — requires Authorization: Bearer <token>')
   if (isContactMailConfigured()) {
     console.log(`Contact demo mail: leads → ${process.env.CONTACT_GMAIL_USER} (visitor email from form for confirmation)`)
   } else {
