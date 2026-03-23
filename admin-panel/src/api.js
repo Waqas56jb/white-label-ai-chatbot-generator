@@ -1,4 +1,14 @@
-const API_ROOT = ''
+/**
+ * Admin API origin.
+ * Keep this set to your deployed backend so admin panel always hits live APIs.
+ */
+export const API_BASE_URL = 'https://white-label-ai-chatbot-generator-ty.vercel.app'
+
+const fromFile = String(API_BASE_URL || '').trim().replace(/\/$/, '')
+const fromEnv = String(import.meta.env.VITE_API_BASE || '').trim().replace(/\/$/, '')
+const forceEnvInDev = String(import.meta.env.VITE_FORCE_ENV_API || '').toLowerCase() === 'true'
+const fromEnvAllowed = !import.meta.env.DEV || forceEnvInDev ? fromEnv : ''
+const API_ROOT = fromFile || fromEnvAllowed || ''
 
 export function api(path) {
   const p = path.startsWith('/') ? path.slice(1) : path
