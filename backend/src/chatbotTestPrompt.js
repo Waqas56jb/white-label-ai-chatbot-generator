@@ -109,10 +109,6 @@ export function deriveChatTheme(inner) {
   }
 }
 
-/**
- * @param {object} inner
- * @param {object | null} platformContact — support / provider contact when users ask about the chat platform
- */
 const TONE_LABEL = {
   friendly: 'Friendly',
   witty: 'Witty',
@@ -123,11 +119,11 @@ const TONE_LABEL = {
   empathetic: 'Empathetic',
 }
 
-export function buildChatSystemPrompt(inner, platformContact = null, toneId = 'professional') {
+export function buildChatSystemPrompt(inner, toneId = 'professional') {
   const tone = normalizeChatToneId(toneId)
   const parts = []
   parts.push(
-    `You are the customer-facing chat assistant for this business. Answer clearly and helpfully using ONLY the knowledge below (structured summary, private operator notes if any, and website text).`,
+    `You are the customer-facing chat assistant for this business. Answer clearly and helpfully using ONLY the scraped website knowledge below (structured summary generated from the website text + website text).`,
   )
   parts.push(
     `**CRITICAL — selected reply tone: "${TONE_LABEL[tone]}"** The visitor chose this tone in the chat UI. Every assistant message you write MUST clearly sound like this tone (word choice, rhythm, warmth, humor, or brevity as specified). Do not sound generic or neutral.`,
@@ -150,27 +146,8 @@ export function buildChatSystemPrompt(inner, platformContact = null, toneId = 'p
     )
   }
 
-  if (platformContact && typeof platformContact === 'object') {
-    const pc = platformContact
-    const bits = []
-    if (pc.name) bits.push(`**Company:** ${pc.name}`)
-    if (pc.phone) bits.push(`**Phone:** ${pc.phone}`)
-    if (pc.email) bits.push(`**Email:** ${pc.email}`)
-    if (pc.address) bits.push(`**Address:** ${pc.address}`)
-    if (pc.hours) bits.push(`**Hours:** ${pc.hours}`)
-    if (bits.length) {
-      parts.push(
-        `\n--- Platform / provider contact (when users ask who provides this chat, support, trials, or billing — answer with a tidy Markdown bullet list) ---\n${bits.join('\n')}`,
-      )
-    }
-  }
-
   parts.push(`\n--- Website URL ---\n${inner.websiteUrl || '(unknown)'}`)
   parts.push(`\n--- Page title ---\n${inner.pageTitle || '(none)'}`)
-
-  if (inner.confidentialPrompts && String(inner.confidentialPrompts).trim()) {
-    parts.push(`\n--- Private operator instructions (follow these carefully) ---\n${String(inner.confidentialPrompts).trim()}`)
-  }
 
   if (inner.structuredContext && typeof inner.structuredContext === 'object') {
     parts.push(

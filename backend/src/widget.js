@@ -73,7 +73,6 @@
   let theme = null
   let trialEndsAtIso = ''
   let trialExpired = false
-  let companyContact = null
 
   function setVarsFromTheme(t) {
     if (!t || !t.colors) return
@@ -141,7 +140,6 @@
       trialExpired = false
       trialEndsAtIso = ''
       theme = null
-      companyContact = null
       render()
     })
 
@@ -223,9 +221,16 @@
   }
 
   const errorState = { message: '' }
+  const SESSION_INVALID_RE = /session expired|session invalid|unlock again/i
 
-  async function ensureOpened() {
-    if (sessionId) return
+  function isSessionInvalidResponse(res, data) {
+    if (res.status === 401) return true
+    const msg = typeof data?.error === 'string' ? data.error : ''
+    return SESSION_INVALID_RE.test(msg)
+  }
+
+  async function ensureOpened(force = false) {
+    if (!force && sessionId) return
     errorState.message = ''
     render()
     const res = await fetch(`${API_ROOT}/widget/open`, {
@@ -254,26 +259,53 @@
     setVarsFromTheme(theme)
     trialEndsAtIso = data.trialEndsAt || ''
     trialExpired = !!data.trialExpired
-    companyContact = data.companyContact || null
     errorState.message = ''
     render()
   }
 
+  async function postMessage(sessionIdValue, text) {
+    const res = await fetch(`${API_ROOT}/chatbot-test/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionIdValue, message: text, tone: 'professional' }),
+    })
+    const data = await res.json().catch(() => ({}))
+    return { res, data }
+  }
+
   async function ensureMessage(text) {
+    if (!sessionId) {
+      try {
+        await ensureOpened()
+      } catch {
+        return
+      }
+    }
     if (!sessionId) return
     errorState.message = ''
 
     // Optimistic echo
     const nowIso = new Date().toISOString()
-    allHistory = (allHistory || []).concat([{ id: `opt-u-${nowIso}`, threadId, role: 'user', content: text, createdAt: nowIso }])
+    const optimisticId = `opt-u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    allHistory = (allHistory || []).concat([{ id: optimisticId, threadId, role: 'user', content: text, createdAt: nowIso }])
     render()
 
-    const res = await fetch(`${API_ROOT}/chatbot-test/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, message: text, tone: 'professional' }),
-    })
-    const data = await res.json().catch(() => ({}))
+    let { res, data } = await postMessage(sessionId, text)
+
+    // Session may expire after idle/refresh; auto-open fresh session and retry once.
+    if (isSessionInvalidResponse(res, data)) {
+      try {
+        await ensureOpened(true)
+      } catch {
+        // keep original response handling below
+      }
+      if (sessionId) {
+        const retry = await postMessage(sessionId, text)
+        res = retry.res
+        data = retry.data
+      }
+    }
+
     if (res.status === 403 && data.trialExpired) {
       trialExpired = true
       errorState.message = 'Trial ended. Contact the business to continue.'
@@ -284,7 +316,7 @@
       const apiErr = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : 'Message failed'
       errorState.message = apiErr
       // Remove optimistic user message if server failed.
-      allHistory = (allHistory || []).filter((m) => !(m && String(m.id || '').startsWith('opt-u-') && m.role === 'user' && String(m.createdAt || '').includes(nowIso.slice(0, 10))))
+      allHistory = (allHistory || []).filter((m) => !(m && String(m.id || '') === optimisticId))
       render()
       return
     }

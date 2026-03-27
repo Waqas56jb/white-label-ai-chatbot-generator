@@ -81,15 +81,6 @@ function trialEndsAtFromRecord(record) {
   return new Date(Date.now() + TRIAL_MS).toISOString()
 }
 
-function companyContactMeta() {
-  return {
-    name: process.env.COMPANY_CONTACT_NAME?.trim() || 'HogayAI',
-    email: process.env.COMPANY_CONTACT_EMAIL?.trim() || 'contacthogayai@gmail.com',
-    phone: process.env.COMPANY_CONTACT_PHONE?.trim() || '+1 (647) 673-9123',
-    address: process.env.COMPANY_CONTACT_ADDRESS?.trim() || 'Toronto, Canada',
-    hours: process.env.COMPANY_CONTACT_HOURS?.trim() || 'Monday to Friday, 9 AM–6 PM EST',
-  }
-}
 const app = express()
 
 /** Public API: any browser origin may call this backend (reflect request Origin). */
@@ -255,12 +246,13 @@ async function rebuildInnerJsonFromStoredWebsite(record) {
     /** @type {any} */ (err).code = 'NO_WEBSITE_URL'
     throw err
   }
-  const ownerContact = {
-    name: typeof record.owner?.name === 'string' ? record.owner.name.trim() : '',
-    email: typeof record.owner?.email === 'string' ? record.owner.email.trim() : '',
-    phone: typeof record.owner?.phone === 'string' ? record.owner.phone.trim() : '',
-  }
-  const crawlOpts = { maxPages: 25, maxDepth: 4 }
+    const ownerContact = {
+      name: typeof record.owner?.name === 'string' ? record.owner.name.trim() : '',
+      email: typeof record.owner?.email === 'string' ? record.owner.email.trim() : '',
+      phone: typeof record.owner?.phone === 'string' ? record.owner.phone.trim() : '',
+    }
+    // Use crawler defaults (env-driven, broader site coverage) instead of a strict 25/4 cap.
+    const crawlOpts = {}
   const result = await crawlWebsiteWithFallback(target, crawlOpts)
 
   let structuredContext = null
@@ -316,29 +308,6 @@ async function getAdminSettings(pool) {
   }
   const saved = r.rowCount ? r.rows[0].settings_json : {}
   return { ...defaults, ...(saved || {}) }
-}
-
-function normalizeWebsiteOwnerContact(owner) {
-  const name = typeof owner?.name === 'string' ? owner.name.trim() : ''
-  const email = typeof owner?.email === 'string' ? owner.email.trim() : ''
-  const phone = typeof owner?.phone === 'string' ? owner.phone.trim() : ''
-  return {
-    name: name || null,
-    email: email || null,
-    phone: phone || null,
-  }
-}
-
-/** Ensures structured JSON always carries verified intake owner details for the chatbot. */
-function attachWebsiteOwnerContact(structured, owner) {
-  const woc = normalizeWebsiteOwnerContact(owner)
-  const has = !!(woc.name || woc.email || woc.phone)
-  if (structured && typeof structured === 'object' && !Array.isArray(structured)) {
-    if (has) return { ...structured, websiteOwnerContact: woc }
-    return structured
-  }
-  if (has) return { websiteOwnerContact: woc }
-  return structured
 }
 
 app.get('/api/health', async (_req, res) => {
@@ -539,7 +508,6 @@ app.post('/api/chatbot-test/open', async (req, res) => {
       trialEndsAt,
       serverTime: new Date().toISOString(),
       trialExpired,
-      companyContact: companyContactMeta(),
     })
   } catch (e) {
     console.error('[chatbot-test/open]', e)
@@ -634,7 +602,6 @@ app.post('/api/widget/open', async (req, res) => {
       trialEndsAt,
       serverTime: new Date().toISOString(),
       trialExpired,
-      companyContact: companyContactMeta(),
     })
   } catch (e) {
     console.error('[widget/open]', e)
@@ -735,7 +702,7 @@ app.post('/api/chatbot-test/message', async (req, res) => {
     }
 
     const toneId = normalizeChatToneId(tone)
-    const systemPrompt = buildChatSystemPrompt(s.inner, companyContactMeta(), toneId)
+    const systemPrompt = buildChatSystemPrompt(s.inner, toneId)
     const history = s.history.map((m) => ({ role: m.role, content: m.content }))
 
     const { content: reply, model } = await runChatCompletion({
@@ -1333,7 +1300,7 @@ app.get('/api/admin/chatbot/:chatbotId/integration', async (req, res) => {
       },
       responseShape: {
         open:
-          '{ ok, sessionId, threadId, chatHistory?, theme?, chatbotId, trialEndsAt, serverTime, trialExpired, companyContact? }',
+          '{ ok, sessionId, threadId, chatHistory?, theme?, chatbotId, trialEndsAt, serverTime, trialExpired }',
         message: '{ ok, reply, model?, threadId, saved? }',
         history: '{ ok, messages, threadId }',
         clear: '{ ok, threadId }',

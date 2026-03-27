@@ -299,26 +299,6 @@ export default function App() {
     }
   }
 
-  async function copyToClipboard(text) {
-    if (window.navigator.clipboard?.writeText) {
-      await window.navigator.clipboard.writeText(text)
-      return
-    }
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.left = '-9999px'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    try {
-      const ok = document.execCommand('copy')
-      if (!ok) throw new Error('execCommand copy returned false')
-    } finally {
-      document.body.removeChild(ta)
-    }
-  }
-
   function triggerTextFileDownload(text, filename) {
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -365,6 +345,21 @@ export default function App() {
     const msgUrl = String(ep.chatMessage || '')
     const histUrl = String(ep.chatHistory || '')
     const clearUrl = String(ep.chatClear || '')
+    const defaultVercelOrigin = 'https://white-label-ai-chatbot-generator-ty.vercel.app'
+    const envApiBase = String(import.meta.env.VITE_API_BASE || '').trim().replace(/\/$/, '')
+    const configuredBase = envApiBase || defaultVercelOrigin
+    const configuredOrigin = configuredBase.replace(/\/api$/i, '')
+    const enforceVercel = /(^|\.)localhost$|127\.0\.0\.1/i
+    const finalApiBase = enforceVercel.test(apiBase) || !apiBase ? `${configuredOrigin}/api` : apiBase
+    const finalWidgetUrl = enforceVercel.test(widgetUrl) || !widgetUrl ? `${configuredOrigin}/widget.js` : widgetUrl
+    const finalOpenUrl = enforceVercel.test(openUrl) || !openUrl ? `${configuredOrigin}/api/widget/open` : openUrl
+    const finalMsgUrl =
+      enforceVercel.test(msgUrl) || !msgUrl ? `${configuredOrigin}/api/chatbot-test/message` : msgUrl
+    const finalHistUrl =
+      enforceVercel.test(histUrl) || !histUrl ? `${configuredOrigin}/api/chatbot-test/history` : histUrl
+    const finalClearUrl =
+      enforceVercel.test(clearUrl) || !clearUrl ? `${configuredOrigin}/api/chatbot-test/clear` : clearUrl
+    const finalEmbedCode = `<script src="${finalWidgetUrl}" data-wl-chatbot-id="${cid}" data-wl-integration-secret="${secret}" defer></script>`
     const openPayload = data.payload?.open && typeof data.payload.open === 'object' ? data.payload.open : {}
     const messagePayload =
       data.payload?.message && typeof data.payload.message === 'object' ? data.payload.message : {}
@@ -382,11 +377,11 @@ export default function App() {
     const clearJson = JSON.stringify(clearPayload, null, 2)
 
     const curlOpen =
-      openUrl &&
-      `curl -X POST "${openUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${openJson.replace(/'/g, "'\\''")}'`
+      finalOpenUrl &&
+      `curl -X POST "${finalOpenUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${openJson.replace(/'/g, "'\\''")}'`
     const curlMsg =
-      msgUrl &&
-      `curl -X POST "${msgUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${msgJson.replace(/'/g, "'\\''")}'`
+      finalMsgUrl &&
+      `curl -X POST "${finalMsgUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${msgJson.replace(/'/g, "'\\''")}'`
 
     return [
       `=== WHITE LABEL AI — CLIENT INTEGRATION PACK (SaaS) ===`,
@@ -399,15 +394,15 @@ export default function App() {
       secret,
       ``,
       `--- API base ---`,
-      apiBase || '(set from your deployed backend origin)',
+      finalApiBase || '(set from your deployed backend origin)',
       `--- Hosted widget script ---`,
-      widgetUrl,
+      finalWidgetUrl,
       ``,
       `--- 1) EMBED ON CLIENT HTML (before </body>) ---`,
-      embedCode,
+      finalEmbedCode,
       ``,
       `--- 2) POST open session (then use sessionId for chat) ---`,
-      `POST ${openUrl}`,
+      `POST ${finalOpenUrl}`,
       `Content-Type: application/json`,
       ``,
       openJson,
@@ -417,7 +412,7 @@ export default function App() {
       curlOpen || '',
       ``,
       `--- 3) POST chat message ---`,
-      `POST ${msgUrl}`,
+      `POST ${finalMsgUrl}`,
       `Content-Type: application/json`,
       ``,
       msgJson,
@@ -429,7 +424,7 @@ export default function App() {
       curlMsg || '',
       ``,
       `--- 4) Optional: history ---`,
-      `POST ${histUrl}`,
+      `POST ${finalHistUrl}`,
       `Content-Type: application/json`,
       ``,
       histJson,
@@ -437,7 +432,7 @@ export default function App() {
       `Response shape: ${String(shapes.history || '')}`,
       ``,
       `--- 5) Optional: clear thread ---`,
-      `POST ${clearUrl}`,
+      `POST ${finalClearUrl}`,
       `Content-Type: application/json`,
       ``,
       clearJson,
@@ -498,28 +493,6 @@ export default function App() {
         ? ' Deploy the latest backend, or run admin via `npm run dev` with API proxy to localhost:3000.'
         : ''
     throw new Error(`Could not load integration snippet (HTTP ${res.status}). ${hint}${extra}`)
-  }
-
-  async function copyIntegrationSnippet(chatbotIdToCopy, websiteUrlForName) {
-    if (!chatbotIdToCopy) return
-    setError('')
-    setIntegrationBusyId(chatbotIdToCopy)
-    try {
-      const data = await loadIntegrationPayload(chatbotIdToCopy)
-      const doc = buildIntegrationPackDoc(data, chatbotIdToCopy)
-      try {
-        await copyToClipboard(doc)
-        window.alert('Integration pack copied. Send it to your client or paste into their site docs.')
-      } catch {
-        const slug = slugForIntegrationFilename(websiteUrlForName)
-        triggerTextFileDownload(doc, `wlai-client-${chatbotIdToCopy}-${slug}.txt`)
-        window.alert('Clipboard was blocked — downloaded the same pack as a .txt file.')
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setIntegrationBusyId('')
-    }
   }
 
   /** Primary SaaS action: save full client SDK + API doc without relying on clipboard. */
@@ -795,7 +768,7 @@ export default function App() {
               }
             >
               <p className="panel__hint">
-                <strong>Client pack:</strong> use <strong>Download</strong> for embed script + API payloads (same behavior as your hosted chatbot for that website context). First run can take 1–2 minutes while keys are issued. <strong>Copy</strong> puts the same text on the clipboard.
+                <strong>Client pack:</strong> use <strong>Download</strong> for embed script + API payloads (same behavior as your hosted chatbot for that website context). URLs are forced to your Vercel deployment, never localhost.
               </p>
               <Table>
                 <thead>
@@ -842,15 +815,6 @@ export default function App() {
                                 disabled={loading || rowBusy}
                               >
                                 {rowBusy ? 'Preparing…' : 'Download'}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-link"
-                                title="Copy the full pack to clipboard"
-                                onClick={() => copyIntegrationSnippet(c.chatbot_id, c.website_url)}
-                                disabled={loading || rowBusy}
-                              >
-                                {rowBusy ? '…' : 'Copy'}
                               </button>
                               <button type="button" className="btn-danger" onClick={() => deleteChatbot(c.chatbot_id)}>
                                 Remove
