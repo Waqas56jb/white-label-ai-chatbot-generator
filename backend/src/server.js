@@ -185,15 +185,7 @@ function verifyAdminToken(token) {
 }
 
 function requireAdminAuth(req, res, next) {
-  // Login endpoint is intentionally public.
-  if (req.path === '/login') return next()
-  const raw = String(req.headers.authorization || '')
-  const m = /^Bearer\s+(.+)$/i.exec(raw)
-  const token = m ? String(m[1] || '').trim() : ''
-  if (!token) return res.status(401).json({ ok: false, error: 'Admin login required' })
-  const session = verifyAdminToken(token)
-  if (!session) return res.status(401).json({ ok: false, error: 'Session expired. Please login again.' })
-  req.adminSession = session
+  // Admin panel auth disabled per product requirement.
   return next()
 }
 
