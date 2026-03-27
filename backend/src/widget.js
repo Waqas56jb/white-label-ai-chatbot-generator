@@ -275,7 +275,7 @@
     const res = await fetch(`${API_ROOT}/chatbot-test/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionIdValue, message: text, tone: 'professional' }),
+      body: JSON.stringify({ sessionId: sessionIdValue, message: text }),
     })
     const data = await res.json().catch(() => ({}))
     return { res, data }

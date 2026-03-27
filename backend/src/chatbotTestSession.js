@@ -1,9 +1,9 @@
 import crypto from 'crypto'
 
-const SESSION_TTL_MS = 1* 60 * 60 * 1000
+const SESSION_TTL_MS = 3* 60 * 60 * 1000
 const MAX_HISTORY_MESSAGES = 24
 
-/** @type {Map<string, { inner: object, history: { role: string, content: string }[], expiresAt: number, trialEndsAt: string, chatbotId: string, threadId: string, trialBypass: boolean, noSessionExpiry: boolean, source: string }>} */
+/** @type {Map<string, { inner: object, history: { role: string, content: string }[], expiresAt: number, trialEndsAt: string, chatbotId: string, threadId: string, trialBypass: boolean, noSessionExpiry: boolean, source: string, toneId: string }>} */
 const sessions = new Map()
 
 function cleanup() {
@@ -18,7 +18,7 @@ function cleanup() {
  * @param {object} inner Decrypted payload from stored bundle
  * @param {string} trialEndsAt ISO timestamp — chat blocked after this instant
  * @param {string} chatbotId 8-digit id
- * @param {{ trialBypass?: boolean, noSessionExpiry?: boolean, source?: string }} [options]
+ * @param {{ trialBypass?: boolean, noSessionExpiry?: boolean, source?: string, toneId?: string }} [options]
  * @returns {{ sessionId: string, threadId: string }}
  */
 export function createTestSession(inner, trialEndsAt, chatbotId, options = {}) {
@@ -28,6 +28,7 @@ export function createTestSession(inner, trialEndsAt, chatbotId, options = {}) {
   const trialBypass = !!options?.trialBypass
   const noSessionExpiry = !!options?.noSessionExpiry
   const source = String(options?.source || '')
+  const toneId = String(options?.toneId || '')
   sessions.set(sessionId, {
     inner,
     history: [],
@@ -38,6 +39,7 @@ export function createTestSession(inner, trialEndsAt, chatbotId, options = {}) {
     trialBypass,
     noSessionExpiry,
     source,
+    toneId,
   })
   return { sessionId, threadId }
 }

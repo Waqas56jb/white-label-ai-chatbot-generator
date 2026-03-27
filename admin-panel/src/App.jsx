@@ -71,7 +71,7 @@ function Sidebar({ active, onChange }) {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="brand__badge">WL</div>
+        <img className="brand__badge-img" src="/api/logo/admin.svg" alt="Admin logo" />
         <div>
           <p className="brand__eyebrow">White Label AI</p>
           <h1 className="brand__title">Admin Panel</h1>
@@ -193,6 +193,7 @@ export default function App() {
   const [leadQuery, setLeadQuery] = useState('')
   const [expandedLead, setExpandedLead] = useState(null)
   const [leadToast, setLeadToast] = useState('')
+  const [chatbotConfigModal, setChatbotConfigModal] = useState(null)
   const [settings, setSettings] = useState({
     theme: { red: '#dc2626', green: '#15803d', black: '#000000', white: '#ffffff' },
     pricing: { starter: 299, growth: 499, pro: 799, currency: 'USD' },
@@ -269,6 +270,13 @@ export default function App() {
       botCount,
     }
   }, [threads, messages])
+
+  const sortedThreads = useMemo(() => {
+    const rows = Array.isArray(threads) ? threads.slice() : []
+    // Chronological order (oldest → newest) as requested.
+    rows.sort((a, b) => String(a.first_message_at || '').localeCompare(String(b.first_message_at || '')))
+    return rows
+  }, [threads])
 
   const filteredLeads = useMemo(() => {
     const rows = Array.isArray(leads) ? leads : []
@@ -453,6 +461,49 @@ export default function App() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.ok) throw new Error(data?.error || 'Failed to save settings')
       setSettings(data.settings || settings)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const TONE_OPTIONS = useMemo(
+    () => [
+      { id: 'friendly', label: 'Friendly' },
+      { id: 'witty', label: 'Witty' },
+      { id: 'concise', label: 'Concise' },
+      { id: 'professional', label: 'Professional' },
+      { id: 'casual', label: 'Casual' },
+      { id: 'expert', label: 'Expert' },
+      { id: 'empathetic', label: 'Empathetic' },
+    ],
+    [],
+  )
+
+  async function saveChatbotConfig() {
+    if (!chatbotConfigModal?.chatbot_id) return
+    setError('')
+    setLoading(true)
+    try {
+      const payload = {
+        toneId: String(chatbotConfigModal.toneId || 'professional'),
+        masterColor: String(chatbotConfigModal.masterColor || ''),
+        active: !!chatbotConfigModal.active,
+        questions: String(chatbotConfigModal.questionsRaw || '')
+          .split('\n')
+          .map((x) => x.trim())
+          .filter(Boolean),
+      }
+      const res = await authedFetch(ADMIN_API.updateChatbotConfig(chatbotConfigModal.chatbot_id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) throw new Error(data?.error || 'Failed to save chatbot settings')
+      setChatbotConfigModal(null)
+      await loadChatbots()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -730,6 +781,65 @@ export default function App() {
     }
   }
 
+  function exportConversationToPdf() {
+    if (!threadId) return
+    const rows = Array.isArray(messages) ? messages : []
+    const title = `Conversation Report — Bot ${chatbotId || '—'} — Thread ${String(threadId).slice(0, 8)}`
+    const esc = (s) =>
+      String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+    const body = rows
+      .map((m) => {
+        const role = String(m.role || 'assistant')
+        const when = formatIso(m.created_at)
+        const content = esc(m.content || '')
+        return `<div class="msg ${role === 'user' ? 'user' : 'assistant'}">
+  <div class="meta"><span class="role">${esc(role)}</span><span class="dot">•</span><span class="time">${esc(when)}</span></div>
+  <pre class="content">${content}</pre>
+</div>`
+      })
+      .join('\n')
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>${esc(title)}</title>
+    <style>
+      :root { --red: ${settings.theme?.red || '#dc2626'}; --black: #111; --border: rgba(0,0,0,.12); }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 32px; color: #111; }
+      h1 { margin: 0 0 6px; font-size: 18px; }
+      .sub { color: rgba(0,0,0,.6); font-weight: 700; margin-bottom: 18px; }
+      .wrap { display: grid; gap: 10px; }
+      .msg { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+      .msg.user { border-left: 4px solid var(--red); background: rgba(220,38,38,.05); }
+      .msg.assistant { border-left: 4px solid rgba(0,0,0,.22); background: rgba(0,0,0,.02); }
+      .meta { display:flex; gap: 8px; align-items:center; color: rgba(0,0,0,.65); font-size: 12px; font-weight: 800; }
+      .role { text-transform: uppercase; letter-spacing: .08em; }
+      .content { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; }
+      @media print { body { margin: 16px; } }
+    </style>
+  </head>
+  <body>
+    <h1>${esc(title)}</h1>
+    <div class="sub">Exported ${esc(new Date().toLocaleString())}</div>
+    <div class="wrap">${body || '<div class="sub">No messages.</div>'}</div>
+    <script>window.focus(); setTimeout(() => window.print(), 300);</script>
+  </body>
+</html>`
+
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+  }
+
   useEffect(() => {
     if (!canLoad || !authToken) return
     loadMetrics()
@@ -995,6 +1105,8 @@ export default function App() {
                     <th>Created</th>
                     <th>Trial Ends</th>
                     <th>Status</th>
+                    <th>Tone</th>
+                    <th>Active</th>
                     <th>Expiry Live</th>
                     <th>Action</th>
                   </tr>
@@ -1004,6 +1116,9 @@ export default function App() {
                     chatbots.map((c) => {
                       const status = c.trial_ends_at && c.trial_ends_at > new Date().toISOString() ? 'active' : 'ended'
                       const rowBusy = integrationBusyId === c.chatbot_id
+                      const toneLabel = String(c.tone_id || 'professional') || 'professional'
+                      const activeFlag = String(c.active_flag || '').toLowerCase()
+                      const isActive = activeFlag === '' ? true : activeFlag === 'true'
                       return (
                         <tr key={c.chatbot_id}>
                           <td>{c.chatbot_id}</td>
@@ -1018,9 +1133,28 @@ export default function App() {
                           <td>
                             <span className={pillClass(status)}>{status}</span>
                           </td>
+                          <td>{toneLabel}</td>
+                          <td>
+                            <span className={isActive ? 'pill pill--active' : 'pill pill--ended'}>{isActive ? 'on' : 'off'}</span>
+                          </td>
                           <td>{trialTimeLeft(c.trial_ends_at)}</td>
                           <td>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                className="btn-ghost"
+                                onClick={() =>
+                                  setChatbotConfigModal({
+                                    chatbot_id: c.chatbot_id,
+                                    toneId: toneLabel,
+                                    masterColor: String(c.master_color || ''),
+                                    active: isActive,
+                                    questionsRaw: Array.isArray(c.questions) ? c.questions.join('\n') : '',
+                                  })
+                                }
+                              >
+                                Edit
+                              </button>
                               <button
                                 type="button"
                                 className="btn-ghost"
@@ -1040,7 +1174,7 @@ export default function App() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan="10" className="table-empty">
+                      <td colSpan="12" className="table-empty">
                         No data loaded yet.
                       </td>
                     </tr>
@@ -1252,8 +1386,8 @@ export default function App() {
                 <div className="split__left">
                   <p className="subhead">Threads</p>
                   <div className="list">
-                    {threads.length ? (
-                      threads.map((t) => (
+                    {sortedThreads.length ? (
+                      sortedThreads.map((t) => (
                         <button
                           key={`${t.chatbot_id || 'x'}:${t.thread_id}`}
                           type="button"
@@ -1282,7 +1416,12 @@ export default function App() {
                 </div>
 
                 <div className="split__right">
-                  <p className="subhead">Messages {threadId ? `· ${String(threadId).slice(0, 8)}…` : ''}</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <p className="subhead">Messages {threadId ? `· ${String(threadId).slice(0, 8)}…` : ''}</p>
+                    <button type="button" className="btn-ghost" onClick={exportConversationToPdf} disabled={!threadId || loading}>
+                      Export PDF
+                    </button>
+                  </div>
                   <div className="messages">
                     {!threadId ? (
                       <div className="empty-box">Click a bot/thread in the left list to view chat messages.</div>
@@ -1507,6 +1646,100 @@ export default function App() {
                     </button>
                   ) : null}
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {chatbotConfigModal ? (
+          <div className="modal-backdrop" onClick={() => setChatbotConfigModal(null)}>
+            <div className="modal-card modal-card--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <h3>Edit chatbot</h3>
+                <button type="button" className="btn-ghost" onClick={() => setChatbotConfigModal(null)}>
+                  Close
+                </button>
+              </div>
+              <div className="modal-meta">
+                <span>Bot {chatbotConfigModal.chatbot_id}</span>
+                <span>{String(chatbotConfigModal.active ? 'active' : 'inactive')}</span>
+              </div>
+
+              <div className="lead-detail">
+                <div className="lead-detail__block">
+                  <p className="lead-detail__k">Service</p>
+                  <div className="lead-detail__row">
+                    <span className="lead-detail__v">Enable chatbot</span>
+                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!chatbotConfigModal.active}
+                        onChange={(e) => setChatbotConfigModal((m) => ({ ...m, active: e.target.checked }))}
+                      />
+                      <span className="lead-detail__sub">{chatbotConfigModal.active ? 'On' : 'Off'}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="lead-detail__block">
+                  <p className="lead-detail__k">Reply tone (admin locked)</p>
+                  <select
+                    className="input"
+                    value={String(chatbotConfigModal.toneId || 'professional')}
+                    onChange={(e) => setChatbotConfigModal((m) => ({ ...m, toneId: e.target.value }))}
+                    aria-label="Chatbot tone"
+                  >
+                    {TONE_OPTIONS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="lead-detail__sub">Widget + preview will always use this tone.</p>
+                </div>
+
+                <div className="lead-detail__block">
+                  <p className="lead-detail__k">Primary color (optional)</p>
+                  <div className="color-field__row">
+                    <input
+                      className="color-field__picker"
+                      type="color"
+                      value={String(chatbotConfigModal.masterColor || '#dc2626') || '#dc2626'}
+                      onChange={(e) => setChatbotConfigModal((m) => ({ ...m, masterColor: e.target.value }))}
+                    />
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="Auto (server)"
+                      value={String(chatbotConfigModal.masterColor || '')}
+                      onChange={(e) => setChatbotConfigModal((m) => ({ ...m, masterColor: e.target.value }))}
+                    />
+                  </div>
+                  <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem' }}>
+                    <button type="button" className="btn-ghost" onClick={() => setChatbotConfigModal((m) => ({ ...m, masterColor: '' }))}>
+                      Auto
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lead-detail__block lead-detail__block--full">
+                  <p className="lead-detail__k">Suggested questions (optional)</p>
+                  <textarea
+                    className="input"
+                    style={{ minHeight: '120px', resize: 'vertical' }}
+                    value={String(chatbotConfigModal.questionsRaw || '')}
+                    onChange={(e) => setChatbotConfigModal((m) => ({ ...m, questionsRaw: e.target.value }))}
+                    placeholder={'One question per line\nExample: What services do you offer?\nExample: Do you provide emergency support?'}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: '0.85rem', display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-ghost" onClick={() => setChatbotConfigModal(null)} disabled={loading}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-primary" onClick={saveChatbotConfig} disabled={loading}>
+                  Save
+                </button>
               </div>
             </div>
           </div>

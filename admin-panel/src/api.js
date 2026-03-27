@@ -52,4 +52,6 @@ export const ADMIN_API = {
     api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}/integration`),
   integrationBootstrap: (chatbotId) =>
     api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}/integration-bootstrap`),
+  updateChatbotConfig: (chatbotId) =>
+    api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}/config`),
 }

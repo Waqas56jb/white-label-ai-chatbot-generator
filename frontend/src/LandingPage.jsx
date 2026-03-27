@@ -330,7 +330,7 @@ const NAV_SECTION_LINKS = [
 const LOCAL_SITE_MARK = `${import.meta.env.BASE_URL}favicon.svg`
 /** Set `VITE_LANDING_LOGO_URL` to any image URL (matches index.html favicon / OG when set at build). Chatbot uses only scraped `theme.logoUrl`. */
 const PREFERRED_LANDING_LOGO =
-  String(import.meta.env.VITE_LANDING_LOGO_URL || '').trim() || DEFAULT_LANDING_LOGO_CDN
+  String(import.meta.env.VITE_LANDING_LOGO_URL || '').trim() || '/api/logo/admin.svg'
 
 function LandingMark({ variant = 'nav' }) {
   const footer = variant === 'footer'
@@ -458,183 +458,53 @@ const PERSONAL_CHAT_COLOR_DEFAULTS = {
   sendText: '#ffffff',
 }
 
-const CHAT_DOCK_COLOR_STORAGE_KEY = 'sitemind_chat_dock_color_preset'
-const CHAT_DOCK_TONE_STORAGE_KEY = 'sitemind_chat_dock_tone'
-const CHAT_DOCK_DEFAULT_TONE_ID = 'professional'
+const CHAT_DOCK_COLOR_STORAGE_KEY = 'sitemind_chat_dock_master_color'
+// Tone is now admin-locked per chatbot (no user-side tone selector).
 
-/** Seven red / black / white dock themes (merged over the server chatbot palette). */
-const CHAT_DOCK_COLOR_PRESETS = [
-  {
-    id: 'ember',
-    label: 'Ember',
-    swatch: 'linear-gradient(135deg,#dc2626,#1a0505)',
-    colors: {
-      headerBg: '#dc2626',
-      headerText: '#ffffff',
-      accent: '#dc2626',
-      accentSoft: '#fee2e2',
-      surface: '#ffffff',
-      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
-      userBubble: '#fee2e2',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.18)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'noir',
-    label: 'Noir',
-    swatch: 'linear-gradient(135deg,#000000,#dc2626)',
-    colors: {
-      headerBg: '#000000',
-      headerText: '#ffffff',
-      accent: '#dc2626',
-      accentSoft: '#fecaca',
-      surface: '#fafafa',
-      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
-      userBubble: '#e5e5e5',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.2)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'paper',
-    label: 'Paper',
-    swatch: 'linear-gradient(135deg,#ffffff,#fca5a5)',
-    colors: {
-      headerBg: '#ffffff',
-      headerText: '#000000',
-      accent: '#dc2626',
-      accentSoft: '#fee2e2',
-      surface: '#fafafa',
-      surfaceBorder: 'rgba(0, 0, 0, 0.12)',
-      userBubble: '#fee2e2',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.18)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'wine',
-    label: 'Wine',
-    swatch: 'linear-gradient(135deg,#7f1d1d,#000000)',
-    colors: {
-      headerBg: '#7f1d1d',
-      headerText: '#ffffff',
-      accent: '#fecaca',
-      accentSoft: '#fee2e2',
-      surface: '#ffffff',
-      surfaceBorder: 'rgba(127, 29, 29, 0.25)',
-      userBubble: '#fee2e2',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.2)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'graphite',
-    label: 'Graphite',
-    swatch: 'linear-gradient(135deg,#171717,#525252)',
-    colors: {
-      headerBg: '#171717',
-      headerText: '#ffffff',
-      accent: '#dc2626',
-      accentSoft: '#fee2e2',
-      surface: '#ffffff',
-      surfaceBorder: 'rgba(0, 0, 0, 0.14)',
-      userBubble: '#f5f5f5',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.22)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'crimson',
-    label: 'Crimson',
-    swatch: 'linear-gradient(135deg,#991b1b,#450a0a)',
-    colors: {
-      headerBg: '#991b1b',
-      headerText: '#ffffff',
-      accent: '#fecaca',
-      accentSoft: '#fee2e2',
-      surface: '#ffffff',
-      surfaceBorder: 'rgba(153, 27, 27, 0.22)',
-      userBubble: '#fee2e2',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.2)',
-      sendBg: '#dc2626',
-      sendText: '#ffffff',
-    },
-  },
-  {
-    id: 'frost',
-    label: 'Frost',
-    swatch: 'linear-gradient(135deg,#f5f5f5,#000000)',
-    colors: {
-      headerBg: '#f5f5f5',
-      headerText: '#000000',
-      accent: '#dc2626',
-      accentSoft: '#fee2e2',
-      surface: '#fafafa',
-      surfaceBorder: 'rgba(0, 0, 0, 0.1)',
-      userBubble: '#fee2e2',
-      botBubble: '#ffffff',
-      text: '#000000',
-      textMuted: 'rgba(0, 0, 0, 0.58)',
-      inputBorder: 'rgba(0, 0, 0, 0.16)',
-      sendBg: '#000000',
-      sendText: '#ffffff',
-    },
-  },
-]
-
-const CHAT_DOCK_TONE_OPTIONS = [
-  { id: 'friendly', label: 'Friendly', hint: 'Warm & approachable' },
-  { id: 'witty', label: 'Witty', hint: 'Clever, never snarky' },
-  { id: 'concise', label: 'Concise', hint: 'Short & direct' },
-  { id: 'professional', label: 'Professional', hint: 'Clear business voice' },
-  { id: 'casual', label: 'Casual', hint: 'Relaxed conversation' },
-  { id: 'expert', label: 'Expert', hint: 'Confident & precise' },
-  { id: 'empathetic', label: 'Empathetic', hint: 'Supportive & gentle' },
-]
-
-function readDockColorPresetId() {
+function readDockMasterColor() {
   try {
     const v = localStorage.getItem(CHAT_DOCK_COLOR_STORAGE_KEY)
-    if (!v) return ''
-    if (v === 'auto') return ''
-    return CHAT_DOCK_COLOR_PRESETS.some((p) => p.id === v) ? v : ''
+    const raw = String(v || '').trim()
+    if (!raw) return ''
+    const c = raw.startsWith('#') ? raw : `#${raw}`
+    return /^#[0-9a-fA-F]{6}$/.test(c) ? c.toLowerCase() : ''
   } catch {
     return ''
   }
 }
 
-function readDockToneId() {
-  try {
-    const v = localStorage.getItem(CHAT_DOCK_TONE_STORAGE_KEY)
-    if (v && CHAT_DOCK_TONE_OPTIONS.some((t) => t.id === v)) return v
-  } catch {
-    /* ignore */
+function normalizeHexColor(input, fallback = '') {
+  const raw = String(input || '').trim()
+  if (!raw) return fallback
+  const c = raw.startsWith('#') ? raw : `#${raw}`
+  return /^#[0-9a-fA-F]{6}$/.test(c) ? c.toLowerCase() : fallback
+}
+
+function hexToRgb(hex) {
+  const c = normalizeHexColor(hex, '#000000')
+  return {
+    r: Number.parseInt(c.slice(1, 3), 16),
+    g: Number.parseInt(c.slice(3, 5), 16),
+    b: Number.parseInt(c.slice(5, 7), 16),
   }
-  return CHAT_DOCK_DEFAULT_TONE_ID
+}
+
+function rgbToHex(r, g, b) {
+  const to = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
+function mixHex(a, b, ratio = 0.5) {
+  const p = Math.max(0, Math.min(1, Number(ratio)))
+  const c1 = hexToRgb(a)
+  const c2 = hexToRgb(b)
+  return rgbToHex(c1.r * (1 - p) + c2.r * p, c1.g * (1 - p) + c2.g * p, c1.b * (1 - p) + c2.b * p)
+}
+
+function isLightColor(hex) {
+  const { r, g, b } = hexToRgb(hex)
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luma >= 0.62
 }
 
 function chatHeaderIsLight(headerBg) {
@@ -1391,7 +1261,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
   const [theme, setTheme] = useState(null)
   const [allHistory, setAllHistory] = useState([])
   const [threadId, setThreadId] = useState('')
-  const [dockView, setDockView] = useState('chat')
+  const dockView = 'chat'
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [chatErr, setChatErr] = useState('')
@@ -1411,8 +1281,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
   const [iqSubmitting, setIqSubmitting] = useState(false)
   const [iqDone, setIqDone] = useState(false)
   const [iqErr, setIqErr] = useState('')
-  const [colorPresetId, setColorPresetId] = useState(() => readDockColorPresetId())
-  const [toneId, setToneId] = useState(() => readDockToneId())
+  const [masterColor, setMasterColor] = useState(() => readDockMasterColor())
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const trialEnded = trialExpiredAtOpen || trialRanOut
@@ -1425,14 +1294,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
   }, [allHistory, threadId])
 
-  const historyMessages = useMemo(() => {
-    return allHistory.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
-  }, [allHistory])
-
-  const listToShow = useMemo(
-    () => (dockView === 'history' ? historyMessages : chatMessages),
-    [dockView, historyMessages, chatMessages],
-  )
+  const listToShow = useMemo(() => chatMessages, [chatMessages])
 
   useEffect(() => {
     if (!session) {
@@ -1440,7 +1302,6 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
       setTheme(null)
       setAllHistory([])
       setThreadId('')
-      setDockView('chat')
       setDraft('')
       setSending(false)
       setChatErr('')
@@ -1470,7 +1331,6 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
     setChatbotId(session.chatbotId || '')
     setThreadId(session.threadId || '')
     setAllHistory(Array.isArray(session.chatHistory) ? session.chatHistory : [])
-    setDockView('chat')
     setDraft('')
     setChatErr('')
     setIqDone(false)
@@ -1484,29 +1344,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
     el.scrollTop = el.scrollHeight
   }, [listToShow, sending, trialEnded, panelOpen, dockView])
 
-  useEffect(() => {
-    if (!panelOpen || dockView !== 'history' || !sessionId || trialEnded) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch(`${CHAT_TEST_BASE}/history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!cancelled && res.ok && data.ok && Array.isArray(data.messages)) {
-          setAllHistory(data.messages)
-          if (typeof data.threadId === 'string' && data.threadId) setThreadId(data.threadId)
-        }
-      } catch {
-        /* ignore */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [panelOpen, dockView, sessionId, trialEnded])
+  // Full history view is removed from the user-facing dock.
 
   useEffect(() => {
     if (!session || trialEnded || !trialEndsAtIso) return
@@ -1564,7 +1402,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
       const res = await fetch(`${CHAT_TEST_BASE}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: text, tone: toneId }),
+        body: JSON.stringify({ sessionId, message: text }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 403 && data.trialExpired) {
@@ -1623,45 +1461,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
     }
   }
 
-  const handleClearChat = async () => {
-    if (!sessionId || trialEnded) return
-    if (
-      !window.confirm(
-        'Start a fresh conversation in this window? Saved messages stay under “Full history” and download.',
-      )
-    ) {
-      return
-    }
-    try {
-      const res = await fetch(`${CHAT_TEST_BASE}/clear`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.ok && data.threadId) {
-        setThreadId(data.threadId)
-        setDockView('chat')
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const handleDownloadChat = useCallback(() => {
-    const rows = historyMessages
-    if (!rows.length) return
-    const lines = rows.map(
-      (m) => `${chatTimeLabel(m.createdAt)} [${m.role}] ${String(m.content).replace(/\r?\n/g, ' ')}`,
-    )
-    const blob = new Blob([lines.join('\n\n')], { type: 'text/plain;charset=utf-8' })
-    const a = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    a.href = url
-    a.download = `chatbot-history-${chatbotId || 'export'}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [historyMessages, chatbotId])
+  // Download + clear controls are removed from the user-facing dock.
 
   const handleInquiry = async (ev) => {
     ev.preventDefault()
@@ -1706,33 +1506,37 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
   const baseColors = theme?.colors || {}
   const col = useMemo(() => {
     const serverMerged = withFullPersonalChatColors(resolvePersonalChatColors(baseColors, 'server'))
-    if (!colorPresetId) return serverMerged
-    const preset = CHAT_DOCK_COLOR_PRESETS.find((p) => p.id === colorPresetId)
-    if (!preset) return serverMerged
+    const chosen = normalizeHexColor(masterColor, '')
+    if (!chosen) return serverMerged
+    const headerText = isLightColor(chosen) ? '#111111' : '#ffffff'
+    const accentSoft = mixHex(chosen, '#ffffff', 0.85)
+    const userBubble = mixHex(chosen, '#ffffff', 0.8)
     return withFullPersonalChatColors({
-      ...resolvePersonalChatColors(baseColors, 'server'),
-      ...preset.colors,
+      ...serverMerged,
+      headerBg: chosen,
+      headerText,
+      accent: chosen,
+      accentSoft,
+      userBubble,
+      sendBg: chosen,
+      sendText: headerText,
+      inputBorder: mixHex(chosen, '#000000', 0.75),
+      surfaceBorder: mixHex(chosen, '#000000', 0.82),
     })
-  }, [baseColors, colorPresetId])
+  }, [baseColors, masterColor])
 
-  const setDockColorPreset = useCallback((id) => {
-    setColorPresetId(id)
+  const setDockMasterColor = useCallback((nextColor) => {
+    const normalized = normalizeHexColor(nextColor, '')
+    setMasterColor(normalized)
     try {
-      if (!id) localStorage.removeItem(CHAT_DOCK_COLOR_STORAGE_KEY)
-      else localStorage.setItem(CHAT_DOCK_COLOR_STORAGE_KEY, id)
+      if (!normalized) localStorage.removeItem(CHAT_DOCK_COLOR_STORAGE_KEY)
+      else localStorage.setItem(CHAT_DOCK_COLOR_STORAGE_KEY, normalized)
     } catch {
       /* ignore */
     }
   }, [])
 
-  const setDockTone = useCallback((id) => {
-    setToneId(id)
-    try {
-      localStorage.setItem(CHAT_DOCK_TONE_STORAGE_KEY, id)
-    } catch {
-      /* ignore */
-    }
-  }, [])
+  const lockedToneId = String(theme?.defaultToneId || 'professional')
 
   if (!session || !theme) return null
 
@@ -1852,60 +1656,40 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
             <div className="chat-widget-dock__settings" role="region" aria-label="Chat appearance and reply tone">
               <div className="chat-widget-dock__settings-block">
                 <div className="chat-widget-dock__settings-head">
-                  <span className="chat-widget-dock__settings-title">Colors</span>
-                  <span className="chat-widget-dock__settings-hint">Saved on this device</span>
+                  <span className="chat-widget-dock__settings-title">Primary color</span>
+                  <span className="chat-widget-dock__settings-hint">One color for full chatbot theme</span>
                 </div>
-                <div className="chat-widget-dock__settings-swatches" role="list">
+                <div className="chat-widget-dock__settings-color">
+                  <input
+                    type="color"
+                    className="chat-widget-dock__color-input"
+                    value={normalizeHexColor(masterColor, col.accent || '#dc2626')}
+                    onChange={(e) => setDockMasterColor(e.target.value)}
+                    aria-label="Pick chatbot primary color"
+                  />
+                  <input
+                    type="text"
+                    className="chat-widget-dock__color-text"
+                    value={masterColor || ''}
+                    onChange={(e) => setDockMasterColor(e.target.value)}
+                    placeholder="Auto (server)"
+                    aria-label="Primary color hex"
+                  />
                   <button
                     type="button"
-                    className={`chat-widget-dock__swatch chat-widget-dock__swatch--auto${colorPresetId === '' ? ' is-on' : ''}`}
-                    onClick={() => setDockColorPreset('')}
-                    aria-pressed={colorPresetId === ''}
-                    aria-label="Default — use your chatbot’s colors"
-                    title="Default — use your chatbot’s colors"
+                    className="chat-widget-dock__color-reset"
+                    onClick={() => setDockMasterColor('')}
+                    disabled={!masterColor}
                   >
-                    <span className="chat-widget-dock__swatch-auto-label" aria-hidden="true">
-                      A
-                    </span>
+                    Auto
                   </button>
-                  {CHAT_DOCK_COLOR_PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`chat-widget-dock__swatch${colorPresetId === p.id ? ' is-on' : ''}`}
-                      style={{ background: p.swatch }}
-                      onClick={() => setDockColorPreset(p.id)}
-                      aria-pressed={colorPresetId === p.id}
-                      aria-label={p.label}
-                      title={p.label}
-                    />
-                  ))}
                 </div>
               </div>
               <div className="chat-widget-dock__settings-block">
                 <div className="chat-widget-dock__settings-head">
                   <span className="chat-widget-dock__settings-title">Reply tone</span>
-                  <span className="chat-widget-dock__settings-hint">How the bot writes</span>
+                  <span className="chat-widget-dock__settings-hint">Locked by admin: {lockedToneId}</span>
                 </div>
-                <ul className="chat-widget-dock__tone-list">
-                  {CHAT_DOCK_TONE_OPTIONS.map((t) => (
-                    <li key={t.id}>
-                      <label className="chat-widget-dock__tone-option">
-                        <input
-                          type="radio"
-                          name="sitemind-dock-tone"
-                          value={t.id}
-                          checked={toneId === t.id}
-                          onChange={() => setDockTone(t.id)}
-                        />
-                        <span className="chat-widget-dock__tone-text">
-                          <span className="chat-widget-dock__tone-label">{t.label}</span>
-                          <span className="chat-widget-dock__tone-desc">{t.hint}</span>
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
               </div>
             </div>
           ) : null}
@@ -2032,67 +1816,10 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
             </div>
           ) : (
             <>
-              <div
-                className="chat-widget-dock__subbar"
-                role="toolbar"
-                aria-label="Chat navigation and export"
-                style={{
-                  borderColor: col.surfaceBorder,
-                  color: col.text,
-                  background: `color-mix(in srgb, ${col.surface || '#fff'} 94%, transparent)`,
-                }}
-              >
-                <div className="chat-widget-dock__tabs">
-                  <button
-                    type="button"
-                    className={`chat-widget-dock__tab${dockView === 'chat' ? ' is-on' : ''}`}
-                    onClick={() => setDockView('chat')}
-                  >
-                    Chat
-                  </button>
-                  <button
-                    type="button"
-                    className={`chat-widget-dock__tab${dockView === 'history' ? ' is-on' : ''}`}
-                    onClick={() => setDockView('history')}
-                  >
-                    Full history
-                  </button>
-                </div>
-                <div className="chat-widget-dock__tool-btns">
-                  <button
-                    type="button"
-                    className="chat-widget-dock__tool-btn"
-                    onClick={handleDownloadChat}
-                    disabled={!historyMessages.length}
-                    title="Download full history (.txt)"
-                    aria-label="Download full chat history"
-                  >
-                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-widget-dock__tool-btn"
-                    onClick={handleClearChat}
-                    title="Clear current chat (saved in Full history)"
-                    aria-label="Clear current chat"
-                  >
-                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+              {/* User-facing dock: remove Full history + download + delete controls */}
               <div
                 ref={listRef}
-                className={`chat-personal__messages${dockView === 'history' ? ' chat-personal__messages--history' : ''}`}
+                className="chat-personal__messages"
               >
                 <div className="chat-personal__messages-col">
                   {listToShow.length === 0 && !sending ? (
@@ -2100,9 +1827,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
                       className="chat-personal__empty-hint"
                       style={{ color: col.textMuted || col.text, opacity: 0.85 }}
                     >
-                      {dockView === 'history'
-                        ? 'No messages yet. They appear here as you chat.'
-                        : 'Say hello to start.'}
+                      Say hello to start.
                     </p>
                   ) : null}
                   {(() => {
@@ -2308,6 +2033,7 @@ function FAQItem({ item, open, onToggle }) {
 }
 
 export default function LandingPage() {
+  const SAVED_BOOTSTRAP_KEY = 'wlai_saved_preview_bootstrap_v1'
   const [menuOpen, setMenuOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const [demoModalOpen, setDemoModalOpen] = useState(false)
@@ -2329,10 +2055,16 @@ export default function LandingPage() {
     setDemoModalOpen(true)
   }, [])
   const closeDemoModal = useCallback(() => setDemoModalOpen(false), [])
-  const openPreviewSession = useCallback(async ({ chatbotId, previewSecret }) => {
+  const openPreviewSession = useCallback(async ({ chatbotId, previewSecret }, { openPanel = true } = {}) => {
     const cid = String(chatbotId || '').trim()
     const sec = String(previewSecret || '').trim()
     if (!cid || !sec) return
+    // Persist on this browser so refresh keeps access until trial ends.
+    try {
+      window.localStorage.setItem(SAVED_BOOTSTRAP_KEY, JSON.stringify({ chatbotId: cid, previewSecret: sec }))
+    } catch {
+      /* ignore */
+    }
     const res = await fetch(`${CHAT_TEST_BASE}/open-preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2354,7 +2086,7 @@ export default function LandingPage() {
       chatbotId: data.chatbotId || cid,
       serverTime: data.serverTime,
     })
-    setTestChatPanelOpen(true)
+    setTestChatPanelOpen(!!openPanel)
   }, [])
   const openTestChatbot = useCallback(() => {
     setMenuOpen(false)
@@ -2364,7 +2096,48 @@ export default function LandingPage() {
   const endTestChatSession = useCallback(() => {
     setTestChatSession(null)
     setTestChatPanelOpen(false)
+    try {
+      window.localStorage.removeItem(SAVED_BOOTSTRAP_KEY)
+    } catch {
+      /* ignore */
+    }
   }, [])
+
+  // Auto-restore chat launcher after refresh (same browser) until trial ends.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (testChatSession) return
+      let raw = ''
+      try {
+        raw = String(window.localStorage.getItem(SAVED_BOOTSTRAP_KEY) || '')
+      } catch {
+        raw = ''
+      }
+      if (!raw) return
+      let boot = null
+      try {
+        boot = JSON.parse(raw)
+      } catch {
+        boot = null
+      }
+      const cid = String(boot?.chatbotId || '').trim()
+      const sec = String(boot?.previewSecret || '').trim()
+      if (!cid || !sec) return
+      try {
+        await openPreviewSession({ chatbotId: cid, previewSecret: sec }, { openPanel: false })
+      } catch {
+        // If previewSecret is invalid/disabled/expired, do not hard-fail the page.
+        if (!cancelled) {
+          setTestChatSession(null)
+          setTestChatPanelOpen(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [openPreviewSession, testChatSession])
 
   useEffect(() => {
     let alive = true

@@ -2939,7 +2939,7 @@
   margin: 0;
 }
 
-/* Dock: appearance (7 themes) + reply tone — red / black / white */
+/* Dock: one master color + reply tone */
 .chat-widget-dock__settings {
   flex-shrink: 0;
   padding: 0.55rem 0.45rem 0.65rem;
@@ -2975,52 +2975,55 @@
 .chat-widget-dock__settings-hint {
   font-size: 0.58rem;
   color: rgba(255, 255, 255, 0.5);
-  white-space: nowrap;
+  white-space: normal;
 }
 
-.chat-widget-dock__settings-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+.chat-widget-dock__settings-color {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 0.45rem;
   align-items: center;
 }
 
-.chat-widget-dock__swatch {
-  width: 32px;
-  height: 32px;
+.chat-widget-dock__color-input {
+  width: 46px;
+  height: 36px;
   border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   padding: 0;
+  background: transparent;
   cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    border-color 0.12s ease;
 }
 
-.chat-widget-dock__swatch:hover {
-  transform: scale(1.06);
-  border-color: rgba(255, 255, 255, 0.45);
-}
-
-.chat-widget-dock__swatch.is-on {
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red, #dc2626) 55%, transparent);
-}
-
-.chat-widget-dock__swatch--auto {
-  background: linear-gradient(135deg, #404040, #dc2626);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chat-widget-dock__swatch-auto-label {
-  font-size: 0.72rem;
-  font-weight: 900;
+.chat-widget-dock__color-text {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
-  line-height: 1;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.chat-widget-dock__color-text::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.chat-widget-dock__color-reset {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  padding: 0.38rem 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chat-widget-dock__color-reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .chat-widget-dock__tone-list {

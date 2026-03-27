@@ -37,8 +37,8 @@ import { isContactMailConfigured, sendContactDemoEmails } from './sendContactDem
 import { getDataRoot } from './dataPaths.js'
 
 const PORT = Number(process.env.PORT) || 3000
-/** 5-minute trial from first save (or from legacy record createdAt) */
-const TRIAL_MS = 2 * 60 * 1000
+/** 3-day trial from first save (or from legacy record createdAt) */
+const TRIAL_MS = 3 * 24 * 60 * 60 * 1000
 
 function supportContactMeta() {
   const email = String(process.env.COMPANY_CONTACT_EMAIL || process.env.CONTACT_GMAIL_USER || '').trim()
@@ -370,6 +370,165 @@ app.get('/api/public-settings', async (_req, res) => {
   }
 })
 
+function pickInitials(title) {
+  const s = String(title || '')
+    .replace(/https?:\/\//gi, '')
+    .replace(/www\./gi, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .trim()
+  if (!s) return 'WL'
+  const parts = s.split(/\s+/).filter(Boolean)
+  const a = (parts[0] || '').slice(0, 1).toUpperCase()
+  const b = (parts[1] || parts[0] || '').slice(0, 1).toUpperCase()
+  const out = `${a}${b}`.replace(/[^A-Z0-9]/g, '')
+  return out || 'WL'
+}
+
+function safeHex(input, fallback) {
+  const raw = String(input || '').trim()
+  const v = raw.startsWith('#') ? raw : `#${raw}`
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : fallback
+}
+
+function svgLogo({ title, primary, background }) {
+  const initials = pickInitials(title)
+  const p = safeHex(primary, '#dc2626')
+  const bg = safeHex(background, '#0b0b0b')
+  const t = String(title || '').trim().slice(0, 48)
+  const sub = t ? t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'White Label AI'
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="${sub} logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${p}"/>
+      <stop offset="1" stop-color="${bg}"/>
+    </linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="rgba(0,0,0,0.35)"/>
+    </filter>
+  </defs>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#g)" filter="url(#s)"/>
+  <rect x="64" y="64" width="384" height="384" rx="84" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.16)"/>
+  <text x="256" y="292" text-anchor="middle" font-size="156" font-family="Outfit, ui-sans-serif, system-ui" font-weight="900" fill="#ffffff" letter-spacing="2">${initials}</text>
+  <text x="256" y="356" text-anchor="middle" font-size="26" font-family="Outfit, ui-sans-serif, system-ui" font-weight="800" fill="rgba(255,255,255,0.78)">${sub}</text>
+</svg>`
+}
+
+function normalizeHexColor(input, fallback = '') {
+  const raw = String(input || '').trim()
+  if (!raw) return fallback
+  const c = raw.startsWith('#') ? raw : `#${raw}`
+  return /^#[0-9a-fA-F]{6}$/.test(c) ? c.toLowerCase() : fallback
+}
+
+function hexToRgb(hex) {
+  const c = normalizeHexColor(hex, '#000000')
+  return {
+    r: Number.parseInt(c.slice(1, 3), 16),
+    g: Number.parseInt(c.slice(3, 5), 16),
+    b: Number.parseInt(c.slice(5, 7), 16),
+  }
+}
+
+function rgbToHex(r, g, b) {
+  const to = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
+function mixHex(a, b, ratio = 0.5) {
+  const p = Math.max(0, Math.min(1, Number(ratio)))
+  const c1 = hexToRgb(a)
+  const c2 = hexToRgb(b)
+  return rgbToHex(c1.r * (1 - p) + c2.r * p, c1.g * (1 - p) + c2.g * p, c1.b * (1 - p) + c2.b * p)
+}
+
+function isLightColor(hex) {
+  const { r, g, b } = hexToRgb(hex)
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luma >= 0.62
+}
+
+function getChatConfigFromRecord(record) {
+  const raw = record && typeof record === 'object' ? record.chatConfig : null
+  const cfg = raw && typeof raw === 'object' ? raw : {}
+  const toneId = typeof cfg.toneId === 'string' ? cfg.toneId : 'professional'
+  const masterColor = typeof cfg.masterColor === 'string' ? cfg.masterColor : ''
+  const active = typeof cfg.active === 'boolean' ? cfg.active : true
+  const questions = Array.isArray(cfg.questions) ? cfg.questions : []
+  return { toneId, masterColor, active, questions }
+}
+
+function applyMasterColorToTheme(theme, masterColor) {
+  const c = normalizeHexColor(masterColor, '')
+  if (!c || !theme || typeof theme !== 'object') return theme
+  const t = theme
+  const colors = t.colors && typeof t.colors === 'object' ? t.colors : {}
+  const headerText = isLightColor(c) ? '#111111' : '#ffffff'
+  const accentSoft = mixHex(c, '#ffffff', 0.85)
+  const userBubble = mixHex(c, '#ffffff', 0.8)
+  t.colors = {
+    ...colors,
+    headerBg: c,
+    headerText,
+    accent: c,
+    accentSoft,
+    userBubble,
+    sendBg: c,
+    sendText: headerText,
+    inputBorder: mixHex(c, '#000000', 0.75),
+    surfaceBorder: mixHex(c, '#000000', 0.82),
+  }
+  return t
+}
+
+app.get('/api/logo/admin.svg', async (_req, res) => {
+  try {
+    const pool = getPool()
+    const settings = pool ? await getAdminSettings(pool) : { theme: {} }
+    const theme = settings?.theme && typeof settings.theme === 'object' ? settings.theme : {}
+    const svg = svgLogo({
+      title: 'Admin Panel',
+      primary: theme.red,
+      background: theme.black,
+    })
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).send(svg)
+  } catch (e) {
+    console.error('[logo/admin]', e)
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8')
+    return res.status(200).send(svgLogo({ title: 'Admin Panel', primary: '#dc2626', background: '#0b0b0b' }))
+  }
+})
+
+app.get('/api/logo/chatbot/:chatbotId.svg', async (req, res) => {
+  try {
+    const id = String(req.params.chatbotId || '').trim()
+    if (!CHATBOT_ID_RE.test(id)) return res.status(400).send('invalid')
+    const record = await readChatbotRecord(id)
+    const title =
+      (typeof record?.structuredContext?.inferredBusinessName === 'string' && record.structuredContext.inferredBusinessName.trim()) ||
+      (typeof record?.pageTitle === 'string' && record.pageTitle.trim()) ||
+      (typeof record?.websiteUrl === 'string' && record.websiteUrl.trim()) ||
+      `Bot ${id}`
+    const pool = getPool()
+    const settings = pool ? await getAdminSettings(pool) : { theme: {} }
+    const theme = settings?.theme && typeof settings.theme === 'object' ? settings.theme : {}
+    const svg = svgLogo({
+      title,
+      primary: theme.red,
+      background: theme.black,
+    })
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).send(svg)
+  } catch (e) {
+    console.error('[logo/chatbot]', e)
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8')
+    return res.status(200).send(svgLogo({ title: 'Chatbot', primary: '#dc2626', background: '#0b0b0b' }))
+  }
+})
+
 app.get('/api/health', async (_req, res) => {
   const db = isDatabaseEnabled() ? await dbHealthCheck() : { ok: false, skipped: true }
   res.json({
@@ -599,9 +758,13 @@ app.post('/api/chatbot-test/open', async (req, res) => {
     }
 
     const theme = deriveChatTheme(inner)
+    const cfg = getChatConfigFromRecord(record)
+    if (!cfg.active) return res.status(403).json({ ok: false, error: 'This chatbot is currently deactivated by admin.' })
+    applyMasterColorToTheme(theme, cfg.masterColor)
+    theme.defaultToneId = cfg.toneId
     const trialEndsAt = trialEndsAtFromRecord(record)
     const trialExpired = Date.now() >= Date.parse(trialEndsAt)
-    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, chatbotId)
+    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, chatbotId, { toneId: cfg.toneId })
 
     let chatHistory = []
     try {
@@ -661,9 +824,13 @@ app.post('/api/chatbot-test/open-preview', async (req, res) => {
     }
 
     const theme = deriveChatTheme(inner)
+    const cfg = getChatConfigFromRecord(record)
+    if (!cfg.active) return res.status(403).json({ ok: false, error: 'This chatbot is currently deactivated by admin.' })
+    applyMasterColorToTheme(theme, cfg.masterColor)
+    theme.defaultToneId = cfg.toneId
     const trialEndsAt = trialEndsAtFromRecord(record)
     const trialExpired = Date.now() >= Date.parse(trialEndsAt)
-    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id, { source: 'preview' })
+    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id, { source: 'preview', toneId: cfg.toneId })
 
     let chatHistory = []
     try {
@@ -756,12 +923,17 @@ app.post('/api/widget/open', async (req, res) => {
     }
 
     const theme = deriveChatTheme(inner)
+    const cfg = getChatConfigFromRecord(record)
+    if (!cfg.active) return res.status(403).json({ ok: false, error: 'This chatbot is currently deactivated by admin.' })
+    applyMasterColorToTheme(theme, cfg.masterColor)
+    theme.defaultToneId = cfg.toneId
     const trialEndsAt = trialEndsAtFromRecord(record)
     const trialExpired = Date.now() >= Date.parse(trialEndsAt)
     const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id, {
       trialBypass: true,
       noSessionExpiry: true,
       source: 'widget',
+      toneId: cfg.toneId,
     })
 
     let chatHistory = []
@@ -913,7 +1085,7 @@ app.post('/api/chatbot-test/message', async (req, res) => {
       return res.status(403).json({
         ok: false,
         trialExpired: true,
-        error: 'Your 5-minute trial has ended. Contact us to continue using your chatbot.',
+        error: 'Your 3-day trial has ended. Contact us to continue using your chatbot.',
       })
     }
 
@@ -932,7 +1104,7 @@ app.post('/api/chatbot-test/message', async (req, res) => {
       })
     }
 
-    const toneId = normalizeChatToneId(tone)
+    const toneId = normalizeChatToneId(s.toneId || tone)
     const systemPrompt = buildChatSystemPrompt(s.inner, toneId)
     const history = s.history.map((m) => ({ role: m.role, content: m.content }))
 
@@ -1229,7 +1401,10 @@ app.get('/api/admin/chatbots', async (req, res) => {
          coalesce(record_json->>'websiteUrl', '') AS website_url,
          coalesce(record_json->'owner'->>'name', '') AS owner_name,
          coalesce(record_json->'owner'->>'email', '') AS owner_email,
-         coalesce(record_json->'owner'->>'phone', '') AS owner_phone
+         coalesce(record_json->'owner'->>'phone', '') AS owner_phone,
+         coalesce(record_json->'chatConfig'->>'toneId', '') AS tone_id,
+         coalesce(record_json->'chatConfig'->>'masterColor', '') AS master_color,
+         coalesce((record_json->'chatConfig'->>'active')::text, '') AS active_flag
        FROM public.chatbot_contexts
        ORDER BY created_at DESC
        LIMIT $1`,
@@ -1239,6 +1414,32 @@ app.get('/api/admin/chatbots', async (req, res) => {
   } catch (e) {
     console.error('[admin/chatbots]', e)
     res.status(500).json({ ok: false, error: 'Could not load chatbots' })
+  }
+})
+
+app.put('/api/admin/chatbot/:chatbotId/config', async (req, res) => {
+  try {
+    const id = String(req.params.chatbotId || '').trim()
+    if (!CHATBOT_ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'Invalid chatbotId' })
+    const record = await readChatbotRecord(id)
+    if (!record || !record.encrypted) return res.status(404).json({ ok: false, error: 'Chatbot not found' })
+
+    const b = req.body && typeof req.body === 'object' ? req.body : {}
+    const nextCfg = {
+      ...(record.chatConfig && typeof record.chatConfig === 'object' ? record.chatConfig : {}),
+    }
+
+    if (typeof b.toneId === 'string') nextCfg.toneId = normalizeChatToneId(b.toneId)
+    if (typeof b.masterColor === 'string') nextCfg.masterColor = normalizeHexColor(b.masterColor, '')
+    if (typeof b.active === 'boolean') nextCfg.active = b.active
+    if (Array.isArray(b.questions)) nextCfg.questions = b.questions.map((x) => String(x || '').trim()).filter(Boolean).slice(0, 30)
+
+    const updated = { ...record, chatConfig: nextCfg }
+    await updateChatbotRecord(id, updated)
+    res.json({ ok: true, chatbotId: id, chatConfig: getChatConfigFromRecord(updated) })
+  } catch (e) {
+    console.error('[admin/chatbot/config]', e)
+    res.status(500).json({ ok: false, error: 'Could not save chatbot settings' })
   }
 })
 
@@ -1728,7 +1929,7 @@ app.listen(PORT, async () => {
   console.log('GET /api/chatbot-context/new-id — allocate 8-digit context ID')
   console.log('POST /api/chatbot-context/save — secure store + issue auto widget integration')
   console.log(
-    'POST /api/chatbot-test/open | /message | /history | /clear — personal chat (5-minute trial, persistent history)',
+    'POST /api/chatbot-test/open | /message | /history | /clear — personal chat (3-day trial, persistent history)',
   )
   console.log('POST /api/trial-inquiry — contact form after trial')
   console.log('POST /api/contact-demo — Request a demo (Nodemailer → owner + submitter)')
