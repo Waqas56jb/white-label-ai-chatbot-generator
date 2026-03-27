@@ -1,14 +1,15 @@
 import crypto from 'crypto'
 
-const SESSION_TTL_MS = 2 * 60 * 60 * 1000
+const SESSION_TTL_MS = 1* 60 * 60 * 1000
 const MAX_HISTORY_MESSAGES = 24
 
-/** @type {Map<string, { inner: object, history: { role: string, content: string }[], expiresAt: number, trialEndsAt: string, chatbotId: string, threadId: string }>} */
+/** @type {Map<string, { inner: object, history: { role: string, content: string }[], expiresAt: number, trialEndsAt: string, chatbotId: string, threadId: string, trialBypass: boolean, noSessionExpiry: boolean, source: string }>} */
 const sessions = new Map()
 
 function cleanup() {
   const now = Date.now()
   for (const [id, s] of sessions) {
+    if (s.noSessionExpiry) continue
     if (s.expiresAt < now) sessions.delete(id)
   }
 }
@@ -17,19 +18,26 @@ function cleanup() {
  * @param {object} inner Decrypted payload from stored bundle
  * @param {string} trialEndsAt ISO timestamp — chat blocked after this instant
  * @param {string} chatbotId 8-digit id
+ * @param {{ trialBypass?: boolean, noSessionExpiry?: boolean, source?: string }} [options]
  * @returns {{ sessionId: string, threadId: string }}
  */
-export function createTestSession(inner, trialEndsAt, chatbotId) {
+export function createTestSession(inner, trialEndsAt, chatbotId, options = {}) {
   cleanup()
   const sessionId = crypto.randomBytes(32).toString('base64url')
   const threadId = crypto.randomUUID()
+  const trialBypass = !!options?.trialBypass
+  const noSessionExpiry = !!options?.noSessionExpiry
+  const source = String(options?.source || '')
   sessions.set(sessionId, {
     inner,
     history: [],
-    expiresAt: Date.now() + SESSION_TTL_MS,
+    expiresAt: noSessionExpiry ? Number.MAX_SAFE_INTEGER : Date.now() + SESSION_TTL_MS,
     trialEndsAt: typeof trialEndsAt === 'string' ? trialEndsAt : new Date(trialEndsAt).toISOString(),
     chatbotId: String(chatbotId || ''),
     threadId,
+    trialBypass,
+    noSessionExpiry,
+    source,
   })
   return { sessionId, threadId }
 }
@@ -37,12 +45,12 @@ export function createTestSession(inner, trialEndsAt, chatbotId) {
 export function getTestSession(sessionId) {
   cleanup()
   const s = sessions.get(sessionId)
-  if (!s || s.expiresAt < Date.now()) {
+  if (!s || (!s.noSessionExpiry && s.expiresAt < Date.now())) {
     sessions.delete(sessionId)
     return null
   }
   if (!s.threadId) s.threadId = crypto.randomUUID()
-  s.expiresAt = Date.now() + SESSION_TTL_MS
+  if (!s.noSessionExpiry) s.expiresAt = Date.now() + SESSION_TTL_MS
   return s
 }
 
@@ -66,12 +74,12 @@ export function pushExchange(s, userContent, assistantContent) {
 export function startNewChatThread(sessionId) {
   cleanup()
   const s = sessions.get(sessionId)
-  if (!s || s.expiresAt < Date.now()) {
+  if (!s || (!s.noSessionExpiry && s.expiresAt < Date.now())) {
     sessions.delete(sessionId)
     return null
   }
   s.history = []
   s.threadId = crypto.randomUUID()
-  s.expiresAt = Date.now() + SESSION_TTL_MS
+  if (!s.noSessionExpiry) s.expiresAt = Date.now() + SESSION_TTL_MS
   return s.threadId
 }

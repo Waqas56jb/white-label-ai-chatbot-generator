@@ -762,7 +762,7 @@ function publicErrorMessage(raw, fallback = 'Something went wrong. Please try ag
   return m
 }
 
-function DemoChatbotModal({ open, onClose }) {
+function DemoChatbotModal({ open, onClose, onAutoSessionReady }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -775,13 +775,11 @@ function DemoChatbotModal({ open, onClose }) {
   const [scrapeText, setScrapeText] = useState('')
   const [structuredJson, setStructuredJson] = useState('')
   const [structuredMeta, setStructuredMeta] = useState(null)
-  const [outputTab, setOutputTab] = useState('context')
   const [pageTitle, setPageTitle] = useState('')
   const [scrapedUrl, setScrapedUrl] = useState('')
   const [crawlMeta, setCrawlMeta] = useState(null)
   const [chatbotId, setChatbotId] = useState('')
-  const [lockPassword, setLockPassword] = useState('')
-  const [lockPasswordConfirm, setLockPasswordConfirm] = useState('')
+  const [extraKnowledge, setExtraKnowledge] = useState('')
   const [confidentialPrompts, setConfidentialPrompts] = useState('')
   const [editingScrape, setEditingScrape] = useState(false)
   const [secureSubmitting, setSecureSubmitting] = useState(false)
@@ -816,13 +814,11 @@ function DemoChatbotModal({ open, onClose }) {
       setScrapeText('')
       setStructuredJson('')
       setStructuredMeta(null)
-      setOutputTab('context')
       setPageTitle('')
       setScrapedUrl('')
       setCrawlMeta(null)
       setChatbotId('')
-      setLockPassword('')
-      setLockPasswordConfirm('')
+      setExtraKnowledge('')
       setConfidentialPrompts('')
       setEditingScrape(false)
       setSecureSubmitting(false)
@@ -907,8 +903,7 @@ function DemoChatbotModal({ open, onClose }) {
       setStructuredMeta(data.meta?.structured || null)
       setCrawlMeta(data.meta?.crawl || null)
       setChatbotId('')
-      setLockPassword('')
-      setLockPasswordConfirm('')
+      setExtraKnowledge('')
       setConfidentialPrompts('')
       setEditingScrape(false)
       setSecureError('')
@@ -916,10 +911,8 @@ function DemoChatbotModal({ open, onClose }) {
       setSecureSaved(false)
       if (data.structuredContext && typeof data.structuredContext === 'object') {
         setStructuredJson(JSON.stringify(data.structuredContext, null, 2))
-        setOutputTab('context')
       } else {
         setStructuredJson('')
-        setOutputTab('raw')
       }
       setPhase('result')
       console.info('[Demo chatbot] scrape ok', {
@@ -998,14 +991,6 @@ function DemoChatbotModal({ open, onClose }) {
       setSecureError('Almost ready — wait a moment or tap New ID.')
       return
     }
-    if (lockPassword.length < 8) {
-      setSecureError('Password must be at least 8 characters.')
-      return
-    }
-    if (lockPassword !== lockPasswordConfirm) {
-      setSecureError('Passwords do not match.')
-      return
-    }
     let structuredContext = null
     if (structuredJson.trim()) {
       try {
@@ -1015,6 +1000,9 @@ function DemoChatbotModal({ open, onClose }) {
         return
       }
     }
+    const mergedKnowledge = [String(scrapeText || '').trim(), String(extraKnowledge || '').trim()]
+      .filter(Boolean)
+      .join('\n\n=== ADDITIONAL KNOWLEDGE BASE (USER-ADDED) ===\n\n')
     setSecureSubmitting(true)
     try {
       const res = await fetch(`${CONTEXT_API_BASE}/save`, {
@@ -1022,11 +1010,10 @@ function DemoChatbotModal({ open, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chatbotId,
-          password: lockPassword,
           payload: {
             websiteUrl: scrapedUrl,
             pageTitle,
-            scrapedText: scrapeText,
+            scrapedText: mergedKnowledge,
             structuredContext,
             confidentialPrompts,
             owner: {
@@ -1046,8 +1033,10 @@ function DemoChatbotModal({ open, onClose }) {
       setSecuredExport(data.securedExport)
       setSecureSaved(true)
       setEditingScrape(false)
-      setLockPassword('')
-      setLockPasswordConfirm('')
+      if (onAutoSessionReady && data?.widgetBootstrap?.chatbotId && data?.widgetBootstrap?.integrationSecret) {
+        await onAutoSessionReady(data.widgetBootstrap)
+        onClose()
+      }
     } catch (e) {
       const m = e instanceof Error ? e.message : ''
       const fallback = 'We couldn’t save that. Try again in a moment.'
@@ -1181,55 +1170,46 @@ function DemoChatbotModal({ open, onClose }) {
               </button>
             </div>
 
-            <div className="demo-modal__tabs" role="tablist" aria-label="Output view">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={outputTab === 'context'}
-                className={`demo-modal__tab ${outputTab === 'context' ? 'demo-modal__tab--active' : ''}`}
-                onClick={() => setOutputTab('context')}
-                disabled={!structuredJson}
-              >
-                Smart summary
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={outputTab === 'raw'}
-                className={`demo-modal__tab ${outputTab === 'raw' ? 'demo-modal__tab--active' : ''}`}
-                onClick={() => setOutputTab('raw')}
-              >
-                Website text
-              </button>
-            </div>
             <label className="demo-modal__output-label" htmlFor="scrape-output">
-              {outputTab === 'context' ? 'Summary' : 'Text from your site'}
+              Extracted website text (editable)
             </label>
             <textarea
               id="scrape-output"
               className="demo-modal__output"
               readOnly={!editingScrape || secureSaved}
               rows={20}
-              value={outputTab === 'context' && structuredJson ? structuredJson : scrapeText}
+              value={scrapeText}
               spellCheck={false}
               onChange={(e) => {
                 if (!editingScrape || secureSaved) return
-                const v = e.target.value
-                if (outputTab === 'context' && structuredJson) setStructuredJson(v)
-                else setScrapeText(v)
+                setScrapeText(e.target.value)
               }}
             />
+            <div className="demo-field" style={{ marginTop: '10px' }}>
+              <label className="demo-field__label" htmlFor="extra-knowledge">
+                Additional knowledge base text (optional)
+              </label>
+              <textarea
+                id="extra-knowledge"
+                className="demo-modal__prompts"
+                rows={4}
+                placeholder="Add FAQs, policy details, pricing notes, custom facts..."
+                value={extraKnowledge}
+                onChange={(e) => setExtraKnowledge(e.target.value)}
+                disabled={secureSaved || secureSubmitting}
+                spellCheck
+              />
+            </div>
 
             <div className="demo-modal__secure-card">
               <h4 className="demo-modal__secure-title">Save your chatbot</h4>
               <p className="demo-modal__secure-lead">
-                Pick a password you’ll remember. Use <strong>Test chatbot</strong> on the site to open your preview — same
-                password, no extra codes.
+                No password needed. After save, your chatbot preview auto-opens in the bottom-right.
               </p>
 
               {secureSaved && (
                 <p className="demo-modal__secure-success" role="status">
-                  Saved. You can download a backup file below. Keep your password somewhere safe.
+                  Saved. Your chatbot preview is ready in the bottom-right.
                 </p>
               )}
               {secureSaved && securedExport?.trialEndsAt ? (
@@ -1239,7 +1219,7 @@ function DemoChatbotModal({ open, onClose }) {
                     dateStyle: 'medium',
                     timeStyle: 'short',
                   })}
-                  . Open <strong>Test chatbot</strong> before then to see the timer.
+                  . Chat starts automatically after save.
                 </p>
               ) : null}
 
@@ -1266,38 +1246,6 @@ function DemoChatbotModal({ open, onClose }) {
                 </div>
               </div>
 
-              <div className="demo-modal__form-row demo-modal__secure-pass-row">
-                <div className="demo-field">
-                  <label className="demo-field__label" htmlFor="lock-password">
-                    Password
-                  </label>
-                  <input
-                    id="lock-password"
-                    className="demo-field__input"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="At least 8 characters"
-                    value={lockPassword}
-                    onChange={(e) => setLockPassword(e.target.value)}
-                    disabled={secureSaved || secureSubmitting}
-                  />
-                </div>
-                <div className="demo-field">
-                  <label className="demo-field__label" htmlFor="lock-password-confirm">
-                    Confirm password
-                  </label>
-                  <input
-                    id="lock-password-confirm"
-                    className="demo-field__input"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Repeat password"
-                    value={lockPasswordConfirm}
-                    onChange={(e) => setLockPasswordConfirm(e.target.value)}
-                    disabled={secureSaved || secureSubmitting}
-                  />
-                </div>
-              </div>
 
               <div className="demo-field">
                 <label className="demo-field__label sr-only" htmlFor="confidential-prompts">
@@ -1430,124 +1378,6 @@ function DemoChatbotModal({ open, onClose }) {
             </button>
           </form>
         )}
-      </div>
-    </div>
-  )
-}
-
-function TestChatUnlockModal({ open, onClose, onSuccess }) {
-  const [password, setPassword] = useState('')
-  const [unlockErr, setUnlockErr] = useState('')
-  const [unlocking, setUnlocking] = useState(false)
-
-  useEffect(() => {
-    if (!open) {
-      setPassword('')
-      setUnlockErr('')
-      setUnlocking(false)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e) => {
-      if (e.key === 'Escape' && !unlocking) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose, unlocking])
-
-  const handleUnlock = async (ev) => {
-    ev.preventDefault()
-    setUnlockErr('')
-    if (password.length < 8) {
-      setUnlockErr('Password must be at least 8 characters.')
-      return
-    }
-    setUnlocking(true)
-    try {
-      const res = await fetch(`${CHAT_TEST_BASE}/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.ok) {
-        const apiErr = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : ''
-        throw new Error(apiErr || '__OPEN_GENERIC__')
-      }
-      onSuccess({
-        sessionId: data.sessionId,
-        threadId: data.threadId || '',
-        chatHistory: Array.isArray(data.chatHistory) ? data.chatHistory : [],
-        theme: data.theme,
-        trialEndsAt: data.trialEndsAt || '',
-        trialExpired: !!data.trialExpired,
-        companyContact: data.companyContact || null,
-        chatbotId: data.chatbotId || '',
-        serverTime: data.serverTime,
-      })
-    } catch (err) {
-      const m = err instanceof Error ? err.message : ''
-      const fallback = 'Could not open your chatbot. Check your password and try again.'
-      setUnlockErr(m === '__OPEN_GENERIC__' ? fallback : publicErrorMessage(m, fallback))
-    } finally {
-      setUnlocking(false)
-    }
-  }
-
-  if (!open) return null
-
-  return (
-    <div className="chat-test-modal" role="dialog" aria-modal="true" aria-labelledby="chat-test-title">
-      <button
-        type="button"
-        className="chat-test-modal__backdrop"
-        aria-label="Close dialog"
-        onClick={() => !unlocking && onClose()}
-      />
-      <div className="chat-test-modal__panel">
-        <div className="chat-test-modal__head">
-          <div>
-            <p className="chat-test-modal__eyebrow">Live preview</p>
-            <h2 id="chat-test-title" className="chat-test-modal__title">
-              Test your chatbot
-            </h2>
-            <p className="chat-test-modal__sub">
-              Use the same password you chose when you saved your chatbot. You get a <strong>5-minute trial</strong> from your
-              first save. After you sign in, a chat icon appears at the bottom-right of this page — tap it to open your
-              preview.
-            </p>
-          </div>
-          <button type="button" className="chat-test-modal__close" aria-label="Close" onClick={onClose} disabled={unlocking}>
-            ×
-          </button>
-        </div>
-
-        <form className="chat-test-modal__unlock" onSubmit={handleUnlock}>
-          <div className="demo-field">
-            <label className="demo-field__label" htmlFor="test-context-password">
-              Password
-            </label>
-            <input
-              id="test-context-password"
-              className="demo-field__input"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Your saved chatbot password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {unlockErr ? (
-            <p className="chat-test-modal__err" role="alert">
-              {unlockErr}
-            </p>
-          ) : null}
-          <button type="submit" className="btn btn--primary btn--block" disabled={unlocking}>
-            {unlocking ? 'Opening…' : 'Open my chatbot'}
-          </button>
-        </form>
       </div>
     </div>
   )
@@ -2096,26 +1926,7 @@ function TestChatFloatingDock({ session, panelOpen, onPanelOpenChange, onEndSess
                 <p className="chat-personal__expired-lead">
                   Your trial is over. Leave your details and we’ll follow up with next steps.
                 </p>
-                {companyContact ? (
-                  <div className="chat-personal__direct">
-                    <p className="chat-personal__direct-label">Contact us directly</p>
-                    <a className="chat-personal__direct-link" href={`mailto:${companyContact.email}`}>
-                      {companyContact.email}
-                    </a>
-                    <a
-                      className="chat-personal__direct-link"
-                      href={`tel:${String(companyContact.phone).replace(/\D/g, '')}`}
-                    >
-                      {companyContact.phone}
-                    </a>
-                    {companyContact.address ? (
-                      <span className="chat-personal__direct-meta">{companyContact.address}</span>
-                    ) : null}
-                    {companyContact.hours ? (
-                      <span className="chat-personal__direct-meta">{companyContact.hours}</span>
-                    ) : null}
-                  </div>
-                ) : null}
+                {/* Direct admin email/phone is intentionally hidden in chatbot UI. */}
                 {iqDone ? (
                   <p
                     className="chat-personal__iq-success"
@@ -2500,7 +2311,6 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
   const [demoModalOpen, setDemoModalOpen] = useState(false)
-  const [testChatUnlockOpen, setTestChatUnlockOpen] = useState(false)
   const [testChatSession, setTestChatSession] = useState(null)
   const [testChatPanelOpen, setTestChatPanelOpen] = useState(false)
   const [contactSending, setContactSending] = useState(false)
@@ -2514,17 +2324,38 @@ export default function LandingPage() {
     setDemoModalOpen(true)
   }, [])
   const closeDemoModal = useCallback(() => setDemoModalOpen(false), [])
+  const openSessionWithWidgetCredentials = useCallback(async ({ chatbotId, integrationSecret }) => {
+    const cid = String(chatbotId || '').trim()
+    const sec = String(integrationSecret || '').trim()
+    if (!cid || !sec) return
+    const res = await fetch(`${CHAT_TEST_BASE.replace(/\/chatbot-test$/, '')}/widget/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatbotId: cid, integrationSecret: sec }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.ok) {
+      const apiErr = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : 'Could not open chatbot'
+      throw new Error(apiErr)
+    }
+    setTestChatSession({
+      sessionId: data.sessionId,
+      threadId: data.threadId || '',
+      chatHistory: Array.isArray(data.chatHistory) ? data.chatHistory : [],
+      theme: data.theme,
+      trialEndsAt: data.trialEndsAt || '',
+      trialExpired: !!data.trialExpired,
+      companyContact: data.supportContact || null,
+      chatbotId: data.chatbotId || cid,
+      serverTime: data.serverTime,
+    })
+    setTestChatPanelOpen(true)
+  }, [])
   const openTestChatbot = useCallback(() => {
     setMenuOpen(false)
     if (testChatSession) setTestChatPanelOpen(true)
-    else setTestChatUnlockOpen(true)
+    else setDemoModalOpen(true)
   }, [testChatSession])
-  const closeTestChatUnlock = useCallback(() => setTestChatUnlockOpen(false), [])
-  const handleTestChatUnlockSuccess = useCallback((payload) => {
-    setTestChatSession(payload)
-    setTestChatUnlockOpen(false)
-    setTestChatPanelOpen(false)
-  }, [])
   const endTestChatSession = useCallback(() => {
     setTestChatSession(null)
     setTestChatPanelOpen(false)
@@ -3274,8 +3105,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      <DemoChatbotModal open={demoModalOpen} onClose={closeDemoModal} />
-      <TestChatUnlockModal open={testChatUnlockOpen} onClose={closeTestChatUnlock} onSuccess={handleTestChatUnlockSuccess} />
+      <DemoChatbotModal open={demoModalOpen} onClose={closeDemoModal} onAutoSessionReady={openSessionWithWidgetCredentials} />
       <TestChatFloatingDock
         session={testChatSession}
         panelOpen={testChatPanelOpen}

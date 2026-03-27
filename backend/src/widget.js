@@ -163,24 +163,7 @@
       body.appendChild(err)
     }
 
-    if (trialExpired && supportContact && typeof supportContact === 'object') {
-      const lines = []
-      if (supportContact.name) lines.push(`<div><b>Team:</b> ${String(supportContact.name)}</div>`)
-      if (supportContact.email) {
-        const em = String(supportContact.email)
-        lines.push(`<div><b>Email:</b> <a href="mailto:${em}">${em}</a></div>`)
-      }
-      if (supportContact.phone) lines.push(`<div><b>Phone:</b> ${String(supportContact.phone)}</div>`)
-      if (supportContact.address) lines.push(`<div><b>Address:</b> ${String(supportContact.address)}</div>`)
-      if (supportContact.hours) lines.push(`<div><b>Hours:</b> ${String(supportContact.hours)}</div>`)
-      if (lines.length) {
-        const card = document.createElement('div')
-        card.className = 'wl-contact'
-        card.innerHTML =
-          `<div style="font-weight:700; margin-bottom:4px;">Trial expired - contact admin to continue:</div>${lines.join('')}`
-        body.appendChild(card)
-      }
-    }
+    // Contact details are intentionally not shown inside chatbot UI.
 
     const currentThreadMessages = (allHistory || []).filter((m) => String(m.threadId || '') === String(threadId || ''))
     if (!currentThreadMessages.length) {

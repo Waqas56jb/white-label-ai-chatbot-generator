@@ -362,16 +362,14 @@ app.get('/api/chatbot-context/new-id', async (_req, res) => {
 
 app.post('/api/chatbot-context/save', async (req, res) => {
   try {
-    const { chatbotId, password, payload } = req.body || {}
+    const { chatbotId, payload } = req.body || {}
 
     if (!CHATBOT_ID_RE.test(String(chatbotId || ''))) {
       return res.status(400).json({ ok: false, error: 'Invalid or missing 8-digit chatbot ID' })
     }
     const id = String(chatbotId)
-    const pw = typeof password === 'string' ? password : ''
-    if (pw.length < 8) {
-      return res.status(400).json({ ok: false, error: 'Password must be at least 8 characters' })
-    }
+    // Auto-generate an internal lock key so visitors do not need any password for testing/widget.
+    const pw = crypto.randomBytes(24).toString('base64url')
     if (!payload || typeof payload !== 'object') {
       return res.status(400).json({ ok: false, error: 'Missing payload object' })
     }
@@ -397,6 +395,45 @@ app.post('/api/chatbot-context/save', async (req, res) => {
             }
           : { name: '', email: '', phone: '' },
       crawl: payload.crawl && typeof payload.crawl === 'object' ? payload.crawl : null,
+    }
+
+    // Enforce unique account and one-time website extraction at save boundary too.
+    if (isDatabaseEnabled()) {
+      const pool = getPool()
+      if (pool) {
+        const websiteKey = canonicalWebsiteUrl(inner.websiteUrl || '')
+        if (websiteKey) {
+          const sameWebsite = await pool.query(
+            `SELECT chatbot_id FROM public.chatbot_contexts
+             WHERE lower(regexp_replace(coalesce(record_json->>'websiteUrl', ''), '/+$', '')) = $1
+               AND chatbot_id <> $2
+             LIMIT 1`,
+            [websiteKey.replace(/\/+$/, ''), id],
+          )
+          if (sameWebsite.rowCount) {
+            return res.status(409).json({
+              ok: false,
+              error: 'This website has already been extracted once. Contact admin for paid renewal.',
+            })
+          }
+        }
+        const ownerEmail = String(inner.owner?.email || '').trim().toLowerCase()
+        if (ownerEmail) {
+          const sameEmail = await pool.query(
+            `SELECT chatbot_id FROM public.chatbot_contexts
+             WHERE lower(coalesce(record_json->'owner'->>'email', '')) = $1
+               AND chatbot_id <> $2
+             LIMIT 1`,
+            [ownerEmail, id],
+          )
+          if (sameEmail.rowCount) {
+            return res.status(409).json({
+              ok: false,
+              error: 'This email already has an existing chatbot account. Contact admin to upgrade.',
+            })
+          }
+        }
+      }
     }
 
     const plain = JSON.stringify(inner)
@@ -459,6 +496,11 @@ app.post('/api/chatbot-context/save', async (req, res) => {
       chatbotId: id,
       createdAt: record.createdAt,
       trialEndsAt: record.trialEndsAt,
+      // One-time immediate testing credentials for landing-page preview (no password prompt).
+      widgetBootstrap: {
+        chatbotId: id,
+        integrationSecret,
+      },
       /** Portable encrypted backup for download (server-sealed field omitted — for SDK use your embed/API only). */
       securedExport: securedExportForClient,
     })
@@ -612,7 +654,11 @@ app.post('/api/widget/open', async (req, res) => {
     const theme = deriveChatTheme(inner)
     const trialEndsAt = trialEndsAtFromRecord(record)
     const trialExpired = Date.now() >= Date.parse(trialEndsAt)
-    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id)
+    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id, {
+      trialBypass: true,
+      noSessionExpiry: true,
+      source: 'widget',
+    })
 
     let chatHistory = []
     try {
@@ -628,9 +674,9 @@ app.post('/api/widget/open', async (req, res) => {
       chatHistory,
       theme,
       chatbotId: id,
-      trialEndsAt,
+      trialEndsAt: '',
       serverTime: new Date().toISOString(),
-      trialExpired,
+      trialExpired: false,
       supportContact: supportContactMeta(),
     })
   } catch (e) {
@@ -741,7 +787,8 @@ app.post('/api/chatbot-test/message', async (req, res) => {
     }
 
     const trialEndMs = Date.parse(s.trialEndsAt)
-    if (!Number.isNaN(trialEndMs) && Date.now() >= trialEndMs) {
+    const bypassTrial = !!s?.trialBypass && String(s?.source || '') === 'widget'
+    if (!bypassTrial && !Number.isNaN(trialEndMs) && Date.now() >= trialEndMs) {
       return res.status(403).json({
         ok: false,
         trialExpired: true,
@@ -880,6 +927,50 @@ app.post('/api/scrape', async (req, res) => {
     name: typeof name === 'string' ? name.trim() : '',
     email: typeof email === 'string' ? email.trim() : '',
     phone: typeof phone === 'string' ? phone.trim() : '',
+  }
+  const ownerEmailNorm = ownerContact.email.toLowerCase()
+
+  // SaaS policy:
+  // 1) One website can only be extracted once (admin must renew/approve any further extraction).
+  // 2) One email can own only one extracted website.
+  if (isDatabaseEnabled()) {
+    try {
+      const pool = getPool()
+      if (pool) {
+        const websiteExisting = websiteKey
+          ? await pool.query(
+              `SELECT chatbot_id FROM public.chatbot_contexts
+               WHERE lower(regexp_replace(coalesce(record_json->>'websiteUrl', ''), '/+$', '')) = $1
+               LIMIT 1`,
+              [websiteKey.replace(/\/+$/, '')],
+            )
+          : { rowCount: 0 }
+        if (websiteExisting.rowCount) {
+          return res.status(409).json({
+            ok: false,
+            error:
+              'This website has already been extracted once. Contact admin to continue with paid subscription.',
+          })
+        }
+        if (ownerEmailNorm) {
+          const emailExisting = await pool.query(
+            `SELECT chatbot_id FROM public.chatbot_contexts
+             WHERE lower(coalesce(record_json->'owner'->>'email', '')) = $1
+             LIMIT 1`,
+            [ownerEmailNorm],
+          )
+          if (emailExisting.rowCount) {
+            return res.status(409).json({
+              ok: false,
+              error:
+                'This email already has a chatbot account. One unique account can extract one website only. Contact admin for upgrade.',
+            })
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[scrape] uniqueness policy check failed, continuing:', e)
+    }
   }
 
   try {
@@ -1472,7 +1563,7 @@ app.listen(PORT, async () => {
   }
   console.log('POST /api/scrape with JSON { website, name, email, phone }')
   console.log('GET /api/chatbot-context/new-id — allocate 8-digit context ID')
-  console.log('POST /api/chatbot-context/save — password-encrypt & store scraped bundle')
+  console.log('POST /api/chatbot-context/save — secure store + issue auto widget integration')
   console.log(
     'POST /api/chatbot-test/open | /message | /history | /clear — personal chat (5-minute trial, persistent history)',
   )
