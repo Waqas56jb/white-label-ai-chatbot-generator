@@ -169,19 +169,7 @@ function ThemeColorField({ label, value, fallback, onChange }) {
 }
 
 export default function App() {
-  const TOKEN_KEY = 'wlai_admin_token'
   const [active, setActive] = useState('dashboard')
-  const [authToken, setAuthToken] = useState(() => {
-    try {
-      return String(window.localStorage.getItem(TOKEN_KEY) || '')
-    } catch {
-      return ''
-    }
-  })
-  const [authEmail, setAuthEmail] = useState('')
-  const [authPassword, setAuthPassword] = useState('')
-  const [authLoading, setAuthLoading] = useState(false)
-  const [authError, setAuthError] = useState('')
 
   const [metrics, setMetrics] = useState(null)
   const [chatbots, setChatbots] = useState([])
@@ -301,24 +289,7 @@ export default function App() {
     })
   }, [leads, leadQuery])
 
-  const authedFetch = useCallback(
-    async (url, init = {}) => {
-      const headers = new Headers(init.headers || {})
-      if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
-      const res = await fetch(url, { ...init, headers })
-      if (res.status === 401) {
-        try {
-          window.localStorage.removeItem(TOKEN_KEY)
-        } catch {
-          /* ignore */
-        }
-        setAuthToken('')
-        throw new Error('Session expired. Please login again.')
-      }
-      return res
-    },
-    [authToken],
-  )
+  const authedFetch = useCallback(async (url, init = {}) => fetch(url, init), [])
 
   async function copyLeadText(label, value) {
     const text = String(value || '').trim()
@@ -331,49 +302,6 @@ export default function App() {
       // clipboard may be blocked; fall back to a simple prompt
       window.prompt(`Copy ${label}`, text)
     }
-  }
-
-  async function loginAdmin(e) {
-    e.preventDefault()
-    setAuthError('')
-    setAuthLoading(true)
-    try {
-      const res = await fetch(ADMIN_API.login, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: authEmail.trim(),
-          password: authPassword,
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.ok || !data.token) {
-        throw new Error(data?.error || 'Login failed')
-      }
-      const token = String(data.token || '')
-      if (!token) throw new Error('Login failed')
-      try {
-        window.localStorage.setItem(TOKEN_KEY, token)
-      } catch {
-        /* ignore */
-      }
-      setAuthToken(token)
-      setAuthPassword('')
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Could not login')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  function logoutAdmin() {
-    try {
-      window.localStorage.removeItem(TOKEN_KEY)
-    } catch {
-      /* ignore */
-    }
-    setAuthToken('')
-    setAuthPassword('')
   }
 
   async function loadMetrics() {
@@ -841,55 +769,14 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!canLoad || !authToken) return
+    if (!canLoad) return
     loadMetrics()
     loadChatbots()
     loadAnalytics()
     loadSettings()
     loadConversations()
     loadLeads()
-  }, [canLoad, authToken])
-
-  if (!authToken) {
-    return (
-      <div className="admin-login-shell">
-        <form className="admin-login-card" onSubmit={loginAdmin}>
-          <p className="admin-login-eyebrow">White Label AI</p>
-          <h1 className="admin-login-title">Admin Login</h1>
-          <p className="admin-login-subtitle">Login with your admin email and password.</p>
-
-          <label className="admin-login-field">
-            Email
-            <input
-              className="input"
-              type="email"
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-              placeholder="admin@example.com"
-              required
-            />
-          </label>
-          <label className="admin-login-field">
-            Password
-            <input
-              className="input"
-              type="password"
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </label>
-
-          {authError ? <div className="alert">{authError}</div> : null}
-
-          <button type="submit" className="btn-primary admin-login-btn" disabled={authLoading}>
-            {authLoading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-      </div>
-    )
-  }
+  }, [canLoad])
 
   return (
     <div
@@ -934,9 +821,6 @@ export default function App() {
               disabled={loading}
             >
               Refresh
-            </button>
-            <button type="button" className="btn-ghost" onClick={logoutAdmin}>
-              Logout
             </button>
           </div>
         </header>
