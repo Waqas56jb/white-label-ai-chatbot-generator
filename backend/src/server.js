@@ -194,8 +194,25 @@ async function crawlWebsiteWithFallback(seedUrl, crawlOpts) {
   if (mode === 'http' || mode === 'fetch') {
     return crawlWebsiteHttp(seedUrl, crawlOpts)
   }
+  const score = (r) => {
+    const pages = Number(r?.crawl?.pagesVisited || 0)
+    const textLen = String(r?.text || '').length
+    return pages * 5000 + textLen
+  }
   try {
-    return await crawlWebsite(seedUrl, crawlOpts)
+    const seleniumResult = await crawlWebsite(seedUrl, crawlOpts)
+    const weak =
+      Number(seleniumResult?.crawl?.pagesVisited || 0) < 3 || String(seleniumResult?.text || '').length < 6000
+    if (!weak) return seleniumResult
+
+    // Some sites block or thin out browser text. Run HTTP crawl too and keep the richer result.
+    try {
+      const httpResult = await crawlWebsiteHttp(seedUrl, crawlOpts)
+      return score(httpResult) > score(seleniumResult) ? httpResult : seleniumResult
+    } catch (e2) {
+      console.warn('[scrape] HTTP enrichment failed after weak Selenium crawl:', e2 instanceof Error ? e2.message : e2)
+      return seleniumResult
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.warn('[scrape] Selenium unavailable or failed, using HTTP crawl:', msg)
