@@ -1,14 +1,19 @@
 /**
- * Admin API origin.
- * Keep this set to your deployed backend so admin panel always hits live APIs.
+ * Admin API origin — same rules as `frontend/src/api.js`.
+ *
+ * - Local dev: leave `API_BASE_URL` empty so requests use `/api/*` and Vite proxies to `vite.config.js` target.
+ * - Production: set `VITE_API_BASE` at build time to your real backend (e.g. https://api.example.com).
+ * - Dev but hit remote: set `VITE_FORCE_ENV_API=true` and `VITE_API_BASE=https://...`.
  */
-export const API_BASE_URL = 'https://white-label-ai-chatbot-generator-ty.vercel.app'
+export const API_BASE_URL = ''
 
 const fromFile = String(API_BASE_URL || '').trim().replace(/\/$/, '')
 const fromEnv = String(import.meta.env.VITE_API_BASE || '').trim().replace(/\/$/, '')
 const forceEnvInDev = String(import.meta.env.VITE_FORCE_ENV_API || '').toLowerCase() === 'true'
 const fromEnvAllowed = !import.meta.env.DEV || forceEnvInDev ? fromEnv : ''
-const API_ROOT = fromFile || fromEnvAllowed || ''
+
+/** Empty → same-origin `/api/*` (Vite dev proxy to backend). */
+export const API_ROOT = fromFile || fromEnvAllowed || ''
 
 export function api(path) {
   const p = path.startsWith('/') ? path.slice(1) : path
@@ -37,5 +42,8 @@ export const ADMIN_API = {
   },
   settings: api('admin/settings'),
   deleteChatbot: (chatbotId) => api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}`),
+  integration: (chatbotId) =>
+    api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}/integration`),
+  integrationBootstrap: (chatbotId) =>
+    api(`admin/chatbot/${encodeURIComponent(String(chatbotId))}/integration-bootstrap`),
 }
-

@@ -62,10 +62,7 @@ CREATE TRIGGER trg_chatbot_contexts_updated_at
   FOR EACH ROW
   EXECUTE PROCEDURE public.set_chatbot_contexts_updated_at();
 
--- ---------------------------------------------------------------------------
--- 2) Optional: trial / lead inquiries (for analytics or future API wiring)
---    Backend currently may still write JSON files; this table is ready for DB.
--- ---------------------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS public.trial_inquiries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -112,16 +109,3 @@ CREATE INDEX IF NOT EXISTS idx_chatbot_chat_messages_bot_created
 
 COMMENT ON TABLE public.chatbot_chat_messages IS
   'Test chat per chatbot; thread_id scopes one conversation before Clear.';
-
--- ---------------------------------------------------------------------------
--- Row Level Security (RLS)
---   Backend uses the service / direct Postgres connection string with a role
---   that bypasses RLS for inserts/selects. If you ever query from the browser
---   with anon key, enable RLS and add policies — not required for server-only.
--- ---------------------------------------------------------------------------
--- ALTER TABLE public.chatbot_contexts ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.trial_inquiries ENABLE ROW LEVEL SECURITY;
-
--- =============================================================================
--- Done. Set DATABASE_URL in backend/.env to your PostgreSQL connection URI.
--- =============================================================================

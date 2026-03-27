@@ -343,6 +343,14 @@ body {
   padding: 0.9rem;
 }
 
+.panel__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  opacity: 0.72;
+  line-height: 1.45;
+  max-width: 72rem;
+}
+
 .table-wrap {
   overflow: auto;
 }

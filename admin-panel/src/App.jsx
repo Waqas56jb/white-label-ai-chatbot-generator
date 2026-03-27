@@ -139,6 +139,8 @@ export default function App() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  /** While non-null, that chatbot row is fetching bootstrap + integration (can take 1–2 min on first SDK enable). */
+  const [integrationBusyId, setIntegrationBusyId] = useState('')
 
   const canLoad = useMemo(() => true, [])
 
@@ -294,6 +296,246 @@ export default function App() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function copyToClipboard(text) {
+    if (window.navigator.clipboard?.writeText) {
+      await window.navigator.clipboard.writeText(text)
+      return
+    }
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    try {
+      const ok = document.execCommand('copy')
+      if (!ok) throw new Error('execCommand copy returned false')
+    } finally {
+      document.body.removeChild(ta)
+    }
+  }
+
+  function triggerTextFileDownload(text, filename) {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  /** Hostname slug for download filename (from client website column). */
+  function slugForIntegrationFilename(websiteUrl) {
+    const raw = String(websiteUrl || '').trim()
+    if (!raw) return 'client-site'
+    try {
+      const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+      return String(u.hostname || '')
+        .replace(/^www\./i, '')
+        .replace(/[^a-z0-9.-]+/gi, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48) || 'client-site'
+    } catch {
+      return 'client-site'
+    }
+  }
+
+  /**
+   * @param {object} data — JSON from GET /api/admin/chatbot/:id/integration
+   * @param {string} chatbotIdFallback
+   */
+  function buildIntegrationPackDoc(data, chatbotIdFallback) {
+    const embedCode = typeof data.embedCode === 'string' ? data.embedCode : ''
+    if (!embedCode.trim()) throw new Error('No embed code returned by backend')
+
+    const cid = String(data.chatbotId || chatbotIdFallback)
+    const secret = String(data.integrationSecret || '')
+    const apiBase = typeof data.apiBase === 'string' ? data.apiBase : ''
+    const widgetUrl = typeof data.widgetScriptUrl === 'string' ? data.widgetScriptUrl : ''
+    const ep = data.endpoints && typeof data.endpoints === 'object' ? data.endpoints : {}
+    const openUrl = String(ep.widgetOpen || '')
+    const msgUrl = String(ep.chatMessage || '')
+    const histUrl = String(ep.chatHistory || '')
+    const clearUrl = String(ep.chatClear || '')
+    const openPayload = data.payload?.open && typeof data.payload.open === 'object' ? data.payload.open : {}
+    const messagePayload =
+      data.payload?.message && typeof data.payload.message === 'object' ? data.payload.message : {}
+    const historyPayload =
+      data.payload?.history && typeof data.payload.history === 'object' ? data.payload.history : {}
+    const clearPayload =
+      data.payload?.clear && typeof data.payload.clear === 'object' ? data.payload.clear : {}
+    const tones = Array.isArray(data.toneIds) ? data.toneIds : []
+    const notes = Array.isArray(data.notes) ? data.notes : []
+    const shapes = data.responseShape && typeof data.responseShape === 'object' ? data.responseShape : {}
+
+    const openJson = JSON.stringify(openPayload, null, 2)
+    const msgJson = JSON.stringify(messagePayload, null, 2)
+    const histJson = JSON.stringify(historyPayload, null, 2)
+    const clearJson = JSON.stringify(clearPayload, null, 2)
+
+    const curlOpen =
+      openUrl &&
+      `curl -X POST "${openUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${openJson.replace(/'/g, "'\\''")}'`
+    const curlMsg =
+      msgUrl &&
+      `curl -X POST "${msgUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${msgJson.replace(/'/g, "'\\''")}'`
+
+    return [
+      `=== WHITE LABEL AI — CLIENT INTEGRATION PACK (SaaS) ===`,
+      ``,
+      `Chatbot ID: ${cid}`,
+      `Use this pack on the client's website. Their visitors do not enter a password; integrationSecret unlocks the widget/API.`,
+      `Context is the website stored for this bot at signup — same answers as your hosted flow.`,
+      ``,
+      `integrationSecret (private API key — do not commit to public repos):`,
+      secret,
+      ``,
+      `--- API base ---`,
+      apiBase || '(set from your deployed backend origin)',
+      `--- Hosted widget script ---`,
+      widgetUrl,
+      ``,
+      `--- 1) EMBED ON CLIENT HTML (before </body>) ---`,
+      embedCode,
+      ``,
+      `--- 2) POST open session (then use sessionId for chat) ---`,
+      `POST ${openUrl}`,
+      `Content-Type: application/json`,
+      ``,
+      openJson,
+      ``,
+      `Response shape: ${String(shapes.open || '')}`,
+      ``,
+      curlOpen || '',
+      ``,
+      `--- 3) POST chat message ---`,
+      `POST ${msgUrl}`,
+      `Content-Type: application/json`,
+      ``,
+      msgJson,
+      ``,
+      `Valid tone (string on "tone"): ${tones.length ? tones.join(', ') : 'friendly | witty | concise | professional | casual | expert | empathetic'}`,
+      ``,
+      `Response shape: ${String(shapes.message || '')}`,
+      ``,
+      curlMsg || '',
+      ``,
+      `--- 4) Optional: history ---`,
+      `POST ${histUrl}`,
+      `Content-Type: application/json`,
+      ``,
+      histJson,
+      ``,
+      `Response shape: ${String(shapes.history || '')}`,
+      ``,
+      `--- 5) Optional: clear thread ---`,
+      `POST ${clearUrl}`,
+      `Content-Type: application/json`,
+      ``,
+      clearJson,
+      ``,
+      `Response shape: ${String(shapes.clear || '')}`,
+      ``,
+      `--- NOTES ---`,
+      ...notes.map((n) => `- ${n}`),
+      ``,
+      `CORS: your backend must allow the client's origin (already open in dev).`,
+      `Trial: if trialExpired is true on open, chat is blocked until the subscription is renewed.`,
+    ].join('\n')
+  }
+
+  async function loadIntegrationPayload(chatbotIdToCopy, { allowPromptBootstrap } = { allowPromptBootstrap: true }) {
+    const res = await authedFetch(ADMIN_API.integration(chatbotIdToCopy))
+    const raw = await res.text()
+    let data = {}
+    try {
+      data = raw ? JSON.parse(raw) : {}
+    } catch {
+      data = {}
+    }
+
+    if (res.ok && data.ok) return data
+
+    const errText = typeof data.error === 'string' ? data.error : ''
+    if (allowPromptBootstrap && res.status === 403 && /integration not configured/i.test(errText)) {
+      let bootRes = await authedFetch(ADMIN_API.integrationBootstrap(chatbotIdToCopy), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      let bootRaw = await bootRes.text()
+      let bootData = {}
+      try {
+        bootData = bootRaw ? JSON.parse(bootRaw) : {}
+      } catch {
+        bootData = {}
+      }
+
+      if (!bootRes.ok || !bootData.ok) {
+        const bh =
+          typeof bootData.error === 'string' && bootData.error.trim()
+            ? bootData.error.trim()
+            : bootRaw.trim().slice(0, 200) || '(empty response)'
+        throw new Error(`Could not enable integration (HTTP ${bootRes.status}). ${bh}`)
+      }
+      return loadIntegrationPayload(chatbotIdToCopy, { allowPromptBootstrap: false })
+    }
+
+    const hint =
+      typeof data.error === 'string' && data.error.trim()
+        ? data.error.trim()
+        : raw.trim().slice(0, 240) || '(empty response)'
+    const extra =
+      res.status === 404
+        ? ' Deploy the latest backend, or run admin via `npm run dev` with API proxy to localhost:3000.'
+        : ''
+    throw new Error(`Could not load integration snippet (HTTP ${res.status}). ${hint}${extra}`)
+  }
+
+  async function copyIntegrationSnippet(chatbotIdToCopy, websiteUrlForName) {
+    if (!chatbotIdToCopy) return
+    setError('')
+    setIntegrationBusyId(chatbotIdToCopy)
+    try {
+      const data = await loadIntegrationPayload(chatbotIdToCopy)
+      const doc = buildIntegrationPackDoc(data, chatbotIdToCopy)
+      try {
+        await copyToClipboard(doc)
+        window.alert('Integration pack copied. Send it to your client or paste into their site docs.')
+      } catch {
+        const slug = slugForIntegrationFilename(websiteUrlForName)
+        triggerTextFileDownload(doc, `wlai-client-${chatbotIdToCopy}-${slug}.txt`)
+        window.alert('Clipboard was blocked — downloaded the same pack as a .txt file.')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIntegrationBusyId('')
+    }
+  }
+
+  /** Primary SaaS action: save full client SDK + API doc without relying on clipboard. */
+  async function downloadClientIntegrationPack(chatbotIdToDownload, websiteUrlForName) {
+    if (!chatbotIdToDownload) return
+    setError('')
+    setIntegrationBusyId(chatbotIdToDownload)
+    try {
+      const data = await loadIntegrationPayload(chatbotIdToDownload)
+      const doc = buildIntegrationPackDoc(data, chatbotIdToDownload)
+      const slug = slugForIntegrationFilename(websiteUrlForName)
+      triggerTextFileDownload(doc, `wlai-client-${chatbotIdToDownload}-${slug}.txt`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIntegrationBusyId('')
     }
   }
 
@@ -552,6 +794,9 @@ export default function App() {
                 </button>
               }
             >
+              <p className="panel__hint">
+                <strong>Client pack:</strong> use <strong>Download</strong> for embed script + API payloads (same behavior as your hosted chatbot for that website context). First run can take 1–2 minutes while keys are issued. <strong>Copy</strong> puts the same text on the clipboard.
+              </p>
               <Table>
                 <thead>
                   <tr>
@@ -571,6 +816,7 @@ export default function App() {
                   {chatbots.length ? (
                     chatbots.map((c) => {
                       const status = c.trial_ends_at && c.trial_ends_at > new Date().toISOString() ? 'active' : 'ended'
+                      const rowBusy = integrationBusyId === c.chatbot_id
                       return (
                         <tr key={c.chatbot_id}>
                           <td>{c.chatbot_id}</td>
@@ -587,9 +833,29 @@ export default function App() {
                           </td>
                           <td>{trialTimeLeft(c.trial_ends_at)}</td>
                           <td>
-                            <button type="button" className="btn-danger" onClick={() => deleteChatbot(c.chatbot_id)}>
-                              Remove
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                className="btn-ghost"
+                                title="Download .txt with embed script + REST payloads for the client site"
+                                onClick={() => downloadClientIntegrationPack(c.chatbot_id, c.website_url)}
+                                disabled={loading || rowBusy}
+                              >
+                                {rowBusy ? 'Preparing…' : 'Download'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-link"
+                                title="Copy the full pack to clipboard"
+                                onClick={() => copyIntegrationSnippet(c.chatbot_id, c.website_url)}
+                                disabled={loading || rowBusy}
+                              >
+                                {rowBusy ? '…' : 'Copy'}
+                              </button>
+                              <button type="button" className="btn-danger" onClick={() => deleteChatbot(c.chatbot_id)}>
+                                Remove
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
