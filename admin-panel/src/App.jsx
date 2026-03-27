@@ -29,6 +29,30 @@ function msgPreview(text, max = 130) {
   return `${t.slice(0, max - 1)}…`
 }
 
+function fmtNumber(n) {
+  const x = Number(n || 0)
+  if (!Number.isFinite(x)) return '0'
+  return x.toLocaleString()
+}
+
+function fmtPercent(value, digits = 1) {
+  const n = Number(value || 0)
+  if (!Number.isFinite(n)) return '0%'
+  return `${n.toFixed(digits)}%`
+}
+
+function formatRelativeFromIso(iso) {
+  const ms = Date.now() - Date.parse(String(iso || ''))
+  if (!Number.isFinite(ms) || ms < 0) return 'just now'
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.floor(hr / 24)
+  return `${d}d ago`
+}
+
 function pillClass(status) {
   if (status === 'active') return 'pill pill--active'
   if (status === 'ended') return 'pill pill--ended'
@@ -39,7 +63,6 @@ function Sidebar({ active, onChange }) {
   const items = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'chatbots', label: 'Chatbots' },
-    { id: 'trials', label: 'Free Trials' },
     { id: 'conversations', label: 'Conversations' },
     { id: 'settings', label: 'Settings' },
   ]
@@ -123,7 +146,6 @@ export default function App() {
 
   const [metrics, setMetrics] = useState(null)
   const [chatbots, setChatbots] = useState([])
-  const [trialInquiries, setTrialInquiries] = useState([])
   const [threads, setThreads] = useState([])
   const [messages, setMessages] = useState([])
   const [analytics, setAnalytics] = useState([])
@@ -134,7 +156,6 @@ export default function App() {
 
   const [chatbotId, setChatbotId] = useState('')
   const [threadId, setThreadId] = useState('')
-  const [trialStatus, setTrialStatus] = useState('active')
   const [expandedMessage, setExpandedMessage] = useState(null)
 
   const [loading, setLoading] = useState(false)
@@ -143,6 +164,67 @@ export default function App() {
   const [integrationBusyId, setIntegrationBusyId] = useState('')
 
   const canLoad = useMemo(() => true, [])
+
+  const dashboardInsights = useMemo(() => {
+    const rows = Array.isArray(analytics) ? analytics : []
+    const totalMessages14d = rows.reduce((sum, d) => sum + Number(d.messages || 0), 0)
+    const totalChatbots14d = rows.reduce((sum, d) => sum + Number(d.chatbots || 0), 0)
+    const totalLeads14d = rows.reduce((sum, d) => sum + Number(d.trial_leads || 0), 0)
+
+    const last7 = rows.slice(-7)
+    const prev7 = rows.slice(-14, -7)
+    const sumLast7 = last7.reduce((sum, d) => sum + Number(d.messages || 0), 0)
+    const sumPrev7 = prev7.reduce((sum, d) => sum + Number(d.messages || 0), 0)
+    const wowMessagesPct = sumPrev7 > 0 ? ((sumLast7 - sumPrev7) / sumPrev7) * 100 : sumLast7 > 0 ? 100 : 0
+
+    const active = Number(metrics?.active_trials || 0)
+    const ended = Number(metrics?.ended_trials || 0)
+    const totalKnown = Math.max(active + ended, 0)
+    const trialWinPct = totalKnown > 0 ? (active / totalKnown) * 100 : 0
+
+    const msgToday = Number(metrics?.messages_today || 0)
+    const avgPerDay14d = totalMessages14d / Math.max(rows.length || 1, 1)
+    const loadVsAvgPct = avgPerDay14d > 0 ? (msgToday / avgPerDay14d) * 100 : 0
+
+    const hotDay = rows.reduce(
+      (best, d) => (Number(d.messages || 0) > Number(best.messages || 0) ? d : best),
+      rows[0] || { day: '—', messages: 0 },
+    )
+
+    const leadToBotPct = totalLeads14d > 0 ? (totalChatbots14d / totalLeads14d) * 100 : 0
+    const messagesPerBot14d = totalChatbots14d > 0 ? totalMessages14d / totalChatbots14d : 0
+
+    return {
+      totalMessages14d,
+      totalChatbots14d,
+      totalLeads14d,
+      wowMessagesPct,
+      trialWinPct,
+      loadVsAvgPct,
+      hotDay,
+      leadToBotPct,
+      messagesPerBot14d,
+      sumLast7,
+      sumPrev7,
+    }
+  }, [analytics, metrics])
+
+  const conversationInsights = useMemo(() => {
+    const threadRows = Array.isArray(threads) ? threads : []
+    const msgRows = Array.isArray(messages) ? messages : []
+    const totalMessagesInLoadedThreads = threadRows.reduce((sum, t) => sum + Number(t.message_count || 0), 0)
+    const avgPerThread =
+      threadRows.length > 0 ? totalMessagesInLoadedThreads / Math.max(threadRows.length, 1) : 0
+    const userCount = msgRows.filter((m) => m.role === 'user').length
+    const botCount = msgRows.filter((m) => m.role !== 'user').length
+    return {
+      totalThreads: threadRows.length,
+      totalMessagesInLoadedThreads,
+      avgPerThread,
+      userCount,
+      botCount,
+    }
+  }, [threads, messages])
 
   const authedFetch = useCallback(
     async (url, init = {}) => {
@@ -512,23 +594,6 @@ export default function App() {
     }
   }
 
-  async function loadTrials(status = 'active') {
-    setError('')
-    setLoading(true)
-    setTrialStatus(status)
-    try {
-      const res = await authedFetch(ADMIN_API.trials(status, 50))
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.ok) throw new Error(data?.error || 'Failed to load trials')
-      setTrialInquiries(Array.isArray(data.trials) ? data.trials : [])
-    } catch (e) {
-      setTrialInquiries([])
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function loadConversations() {
     setError('')
     setLoading(true)
@@ -576,7 +641,6 @@ export default function App() {
     loadAnalytics()
     loadSettings()
     loadConversations()
-    loadTrials('active')
   }, [canLoad, authToken])
 
   if (!authToken) {
@@ -640,11 +704,9 @@ export default function App() {
                 ? 'Dashboard'
                 : active === 'chatbots'
                   ? 'Chatbots'
-                  : active === 'trials'
-                    ? 'Free Trials'
-                    : active === 'conversations'
-                      ? 'Conversations'
-                      : 'Settings'}
+                  : active === 'conversations'
+                    ? 'Conversations'
+                    : 'Settings'}
             </h2>
           </div>
           <div className="topbar__actions">
@@ -657,7 +719,6 @@ export default function App() {
                 loadAnalytics()
                 loadSettings()
                 loadConversations()
-                loadTrials(trialStatus)
               }}
               disabled={loading}
             >
@@ -695,6 +756,37 @@ export default function App() {
 
         {active === 'dashboard' ? (
           <section className="panels">
+            <Panel title="Executive Snapshot">
+              <div className="insight-grid">
+                <article className="insight-card">
+                  <p className="insight-card__label">14-day message volume</p>
+                  <p className="insight-card__value">{fmtNumber(dashboardInsights.totalMessages14d)}</p>
+                  <p className={`insight-card__meta ${dashboardInsights.wowMessagesPct >= 0 ? 'up' : 'down'}`}>
+                    {dashboardInsights.wowMessagesPct >= 0 ? 'Up' : 'Down'} {fmtPercent(Math.abs(dashboardInsights.wowMessagesPct))} vs prior week
+                  </p>
+                </article>
+                <article className="insight-card">
+                  <p className="insight-card__label">Trial health (active share)</p>
+                  <p className="insight-card__value">{fmtPercent(dashboardInsights.trialWinPct)}</p>
+                  <p className="insight-card__meta">
+                    Active {fmtNumber(metrics?.active_trials || 0)} / Ended {fmtNumber(metrics?.ended_trials || 0)}
+                  </p>
+                </article>
+                <article className="insight-card">
+                  <p className="insight-card__label">Lead → chatbot conversion (14d)</p>
+                  <p className="insight-card__value">{fmtPercent(dashboardInsights.leadToBotPct)}</p>
+                  <p className="insight-card__meta">
+                    {fmtNumber(dashboardInsights.totalChatbots14d)} chatbots from {fmtNumber(dashboardInsights.totalLeads14d)} leads
+                  </p>
+                </article>
+                <article className="insight-card">
+                  <p className="insight-card__label">Engagement per new bot (14d)</p>
+                  <p className="insight-card__value">{dashboardInsights.messagesPerBot14d.toFixed(1)}</p>
+                  <p className="insight-card__meta">Avg messages per created chatbot</p>
+                </article>
+              </div>
+            </Panel>
+
             <Panel
               title="Recent Chatbots"
               right={
@@ -737,6 +829,27 @@ export default function App() {
             </Panel>
 
             <Panel title="Analytics (14 days)">
+              <div className="analytics-topline">
+                <div className="analytics-chip">
+                  <span className="analytics-chip__k">Today vs avg</span>
+                  <span className={`analytics-chip__v ${dashboardInsights.loadVsAvgPct >= 100 ? 'up' : 'down'}`}>
+                    {fmtPercent(dashboardInsights.loadVsAvgPct, 0)}
+                  </span>
+                </div>
+                <div className="analytics-chip">
+                  <span className="analytics-chip__k">Best day</span>
+                  <span className="analytics-chip__v">
+                    {dashboardInsights.hotDay?.day ? String(dashboardInsights.hotDay.day).slice(5) : '—'} ·{' '}
+                    {fmtNumber(dashboardInsights.hotDay?.messages || 0)}
+                  </span>
+                </div>
+                <div className="analytics-chip">
+                  <span className="analytics-chip__k">Last 7 vs prev 7</span>
+                  <span className={`analytics-chip__v ${dashboardInsights.sumLast7 >= dashboardInsights.sumPrev7 ? 'up' : 'down'}`}>
+                    {fmtNumber(dashboardInsights.sumLast7)} / {fmtNumber(dashboardInsights.sumPrev7)}
+                  </span>
+                </div>
+              </div>
               <div className="chart">
                 {analytics.length ? (
                   analytics.map((d) => {
@@ -837,69 +950,6 @@ export default function App() {
           </section>
         ) : null}
 
-        {active === 'trials' ? (
-          <section className="panels panels--single">
-            <Panel
-              title="Trial Leads"
-              right={
-                <div className="btn-group">
-                  <button
-                    type="button"
-                    className={`btn-ghost ${trialStatus === 'active' ? 'is-on' : ''}`}
-                    onClick={() => loadTrials('active')}
-                    disabled={loading}
-                  >
-                    Active
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn-ghost ${trialStatus === 'ended' ? 'is-on' : ''}`}
-                    onClick={() => loadTrials('ended')}
-                    disabled={loading}
-                  >
-                    Ended
-                  </button>
-                </div>
-              }
-            >
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Chatbot ID</th>
-                    <th>Website</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trialInquiries.length ? (
-                    trialInquiries.map((t) => (
-                      <tr key={t.id}>
-                        <td>{t.name || '—'}</td>
-                        <td>{t.email || '—'}</td>
-                        <td>{t.phone || '—'}</td>
-                        <td>{t.chatbot_id || '—'}</td>
-                        <td className="td-truncate" title={t.website_url || ''}>
-                          {t.website_url || '—'}
-                        </td>
-                        <td>{formatIso(t.created_at)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" className="table-empty">
-                        No leads loaded yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
-            </Panel>
-          </section>
-        ) : null}
-
         {active === 'conversations' ? (
           <section className="panels panels--single">
             <Panel
@@ -919,6 +969,26 @@ export default function App() {
                 </div>
               }
             >
+              <div className="record-strip">
+                <div className="record-strip__item">
+                  <span className="record-strip__k">Threads loaded</span>
+                  <span className="record-strip__v">{fmtNumber(conversationInsights.totalThreads)}</span>
+                </div>
+                <div className="record-strip__item">
+                  <span className="record-strip__k">Messages in loaded threads</span>
+                  <span className="record-strip__v">{fmtNumber(conversationInsights.totalMessagesInLoadedThreads)}</span>
+                </div>
+                <div className="record-strip__item">
+                  <span className="record-strip__k">Avg per thread</span>
+                  <span className="record-strip__v">{conversationInsights.avgPerThread.toFixed(1)}</span>
+                </div>
+                <div className="record-strip__item">
+                  <span className="record-strip__k">Current thread split</span>
+                  <span className="record-strip__v">
+                    User {fmtNumber(conversationInsights.userCount)} · Bot {fmtNumber(conversationInsights.botCount)}
+                  </span>
+                </div>
+              </div>
               <div className="split">
                 <div className="split__left">
                   <p className="subhead">Threads</p>
@@ -953,7 +1023,7 @@ export default function App() {
                 </div>
 
                 <div className="split__right">
-                  <p className="subhead">Messages</p>
+                  <p className="subhead">Messages {threadId ? `· ${String(threadId).slice(0, 8)}…` : ''}</p>
                   <div className="messages">
                     {!threadId ? (
                       <div className="empty-box">Click a bot/thread in the left list to view chat messages.</div>
@@ -962,7 +1032,7 @@ export default function App() {
                         <div key={m.id} className={`msg msg--${m.role}`}>
                           <div className="msg__meta">
                             <span className="msg__chatbot">Bot {m.chatbot_id || chatbotId || '—'}</span>
-                            <span className="msg__role">{m.role}</span>
+                            <span className={`msg__role msg__role--${m.role === 'user' ? 'user' : 'assistant'}`}>{m.role}</span>
                             <span className="msg__time">{formatIso(m.created_at)}</span>
                           </div>
                           <pre className="msg__content">{msgPreview(m.content, 160)}</pre>
