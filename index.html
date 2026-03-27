@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beautiful AI Chatbot</title>
+  <style>
+    /* Body styling */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f7fa;
+      color: #333;
+    }
+
+    /* Heading styling */
+    h1 {
+      text-align: center;
+      margin-top: 50px;
+      color: #1a73e8;
+    }
+
+    p {
+      text-align: center;
+      margin-bottom: 50px;
+      color: #555;
+    }
+
+    /* Chatbot container floating button */
+    #chatbot-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+    }
+
+    /* Floating button */
+    #chatbot-button {
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    #chatbot-button:hover {
+      background: #155ab6;
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to Our Website</h1>
+  <p>Need help? Chat with our AI assistant!</p>
+
+  <!-- Chatbot Floating Button -->
+  <div id="chatbot-container">
+    <button id="chatbot-button">💬</button>
+  </div>
+
+  <!-- WHITE LABEL AI CHATBOT WIDGET -->
+  <script
+    src="https://white-label-ai-chatbot-generator-ty.vercel.app/widget.js"
+    data-wl-chatbot-id="68328877"
+    data-wl-integration-secret="366C2VMYTi1rFIh1jzydUDpqzY-cCX7eLFoEAO8THBY"
+    defer
+  ></script>
+
+  <script>
+    // Auto-open the chatbot when button is clicked
+    const chatbotBtn = document.getElementById('chatbot-button');
+
+    chatbotBtn.addEventListener('click', () => {
+      // This triggers the widget's open function
+      if (window.WLChatbot) {
+        WLChatbot.open();
+      }
+    });
+  </script>
+
+</body>
+</html>

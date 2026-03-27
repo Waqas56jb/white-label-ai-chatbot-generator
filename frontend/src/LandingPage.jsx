@@ -1033,8 +1033,8 @@ function DemoChatbotModal({ open, onClose, onAutoSessionReady }) {
       setSecuredExport(data.securedExport)
       setSecureSaved(true)
       setEditingScrape(false)
-      if (onAutoSessionReady && data?.widgetBootstrap?.chatbotId && data?.widgetBootstrap?.integrationSecret) {
-        await onAutoSessionReady(data.widgetBootstrap)
+      if (onAutoSessionReady && data?.previewBootstrap?.chatbotId && data?.previewBootstrap?.previewSecret) {
+        await onAutoSessionReady(data.previewBootstrap)
         onClose()
       }
     } catch (e) {
@@ -2324,14 +2324,14 @@ export default function LandingPage() {
     setDemoModalOpen(true)
   }, [])
   const closeDemoModal = useCallback(() => setDemoModalOpen(false), [])
-  const openSessionWithWidgetCredentials = useCallback(async ({ chatbotId, integrationSecret }) => {
+  const openPreviewSession = useCallback(async ({ chatbotId, previewSecret }) => {
     const cid = String(chatbotId || '').trim()
-    const sec = String(integrationSecret || '').trim()
+    const sec = String(previewSecret || '').trim()
     if (!cid || !sec) return
-    const res = await fetch(`${CHAT_TEST_BASE.replace(/\/chatbot-test$/, '')}/widget/open`, {
+    const res = await fetch(`${CHAT_TEST_BASE}/open-preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatbotId: cid, integrationSecret: sec }),
+      body: JSON.stringify({ chatbotId: cid, previewSecret: sec }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data.ok) {
@@ -3105,7 +3105,7 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      <DemoChatbotModal open={demoModalOpen} onClose={closeDemoModal} onAutoSessionReady={openSessionWithWidgetCredentials} />
+      <DemoChatbotModal open={demoModalOpen} onClose={closeDemoModal} onAutoSessionReady={openPreviewSession} />
       <TestChatFloatingDock
         session={testChatSession}
         panelOpen={testChatPanelOpen}

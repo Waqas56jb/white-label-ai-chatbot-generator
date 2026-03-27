@@ -446,6 +446,8 @@ app.post('/api/chatbot-context/save', async (req, res) => {
     const integrationSecret = crypto.randomBytes(32).toString('base64url')
     const integrationSecretHash = hashIntegrationSecret(integrationSecret)
     const integrationSecretEnc = encryptWithServerSecret(integrationSecret)
+    const previewSecret = crypto.randomBytes(24).toString('base64url')
+    const previewSecretHash = hashIntegrationSecret(previewSecret)
     const passwordEnc = encryptWithServerSecret(pw)
 
     const trialEndsAt = new Date(Date.now() + TRIAL_MS).toISOString()
@@ -470,6 +472,9 @@ app.post('/api/chatbot-context/save', async (req, res) => {
         secretHash: integrationSecretHash,
         secretEnc: integrationSecretEnc,
         passwordEnc,
+      },
+      preview: {
+        secretHash: previewSecretHash,
       },
       note: 'Decrypt only with your password using the same algorithm (AES-256-GCM + scrypt).',
     }
@@ -500,6 +505,11 @@ app.post('/api/chatbot-context/save', async (req, res) => {
       widgetBootstrap: {
         chatbotId: id,
         integrationSecret,
+      },
+      // Landing preview only (trial/session restrictions still apply).
+      previewBootstrap: {
+        chatbotId: id,
+        previewSecret,
       },
       /** Portable encrypted backup for download (server-sealed field omitted — for SDK use your embed/API only). */
       securedExport: securedExportForClient,
@@ -583,6 +593,68 @@ app.post('/api/chatbot-test/open', async (req, res) => {
   } catch (e) {
     console.error('[chatbot-test/open]', e)
     res.status(500).json({ ok: false, error: 'Could not open chat session' })
+  }
+})
+
+// Landing preview auto-open (no password UX), but keeps strict trial/session restrictions.
+app.post('/api/chatbot-test/open-preview', async (req, res) => {
+  try {
+    const { chatbotId, previewSecret } = req.body || {}
+    const id = typeof chatbotId === 'string' ? chatbotId.trim() : ''
+    const sec = typeof previewSecret === 'string' ? previewSecret : ''
+    if (!CHATBOT_ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'Invalid chatbotId' })
+    if (sec.length < 12) return res.status(400).json({ ok: false, error: 'Missing previewSecret' })
+
+    const record = await readChatbotRecord(id)
+    if (!record || !record.encrypted) {
+      return res.status(404).json({ ok: false, error: 'Chatbot context not found' })
+    }
+    const preview = record.preview && typeof record.preview === 'object' ? record.preview : null
+    if (!preview?.secretHash) {
+      return res.status(403).json({ ok: false, error: 'Preview access is not configured for this chatbot' })
+    }
+    const expectedHash = hashIntegrationSecret(sec)
+    if (!timingSafeEqualHex(expectedHash, preview.secretHash)) {
+      return res.status(401).json({ ok: false, error: 'Invalid previewSecret' })
+    }
+
+    if (!(record.serverSealed && typeof record.serverSealed === 'object' && record.serverSealed.ciphertext)) {
+      return res.status(403).json({ ok: false, error: 'Preview data unavailable. Re-save chatbot once.' })
+    }
+    let inner
+    try {
+      inner = JSON.parse(decryptWithServerSecret(record.serverSealed))
+    } catch {
+      return res.status(500).json({ ok: false, error: 'Could not open chatbot preview context' })
+    }
+
+    const theme = deriveChatTheme(inner)
+    const trialEndsAt = trialEndsAtFromRecord(record)
+    const trialExpired = Date.now() >= Date.parse(trialEndsAt)
+    const { sessionId, threadId } = createTestSession(inner, trialEndsAt, id, { source: 'preview' })
+
+    let chatHistory = []
+    try {
+      chatHistory = await listChatMessages(id)
+    } catch (e) {
+      console.warn('[chatbot-test/open-preview] load chat history', e)
+    }
+
+    res.json({
+      ok: true,
+      sessionId,
+      threadId,
+      chatHistory,
+      theme,
+      chatbotId: id,
+      trialEndsAt,
+      serverTime: new Date().toISOString(),
+      trialExpired,
+      supportContact: supportContactMeta(),
+    })
+  } catch (e) {
+    console.error('[chatbot-test/open-preview]', e)
+    res.status(500).json({ ok: false, error: 'Could not open chatbot preview' })
   }
 })
 
