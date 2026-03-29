@@ -20,6 +20,23 @@ const HOP = new Set([
   'content-length',
 ])
 
+/** Browser sees Vercel, not the Node backend — backend CORS headers are dropped unless we re-apply here. */
+function applyCors(req, res) {
+  const origin = req.headers.origin
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, OPTIONS')
+  const reqHdr = req.headers['access-control-request-headers']
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    typeof reqHdr === 'string' && reqHdr.trim() ? reqHdr : 'Content-Type, Authorization',
+  )
+}
+
 function forwardHeaders(req) {
   const out = {}
   for (const [k, v] of Object.entries(req.headers)) {
@@ -32,6 +49,12 @@ function forwardHeaders(req) {
 }
 
 export default async function handler(req, res) {
+  applyCors(req, res)
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
+  }
+
   const raw = process.env.BACKEND_URL || process.env.VITE_API_BASE || ''
   const backend = String(raw).trim().replace(/\/$/, '')
   if (!backend) {
@@ -77,6 +100,7 @@ export default async function handler(req, res) {
     })
 
     const ct = r.headers.get('content-type') || 'application/json; charset=utf-8'
+    applyCors(req, res)
     res.status(r.status).setHeader('content-type', ct)
 
     const buf = Buffer.from(await r.arrayBuffer())
@@ -84,6 +108,7 @@ export default async function handler(req, res) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[api proxy]', target, msg)
+    applyCors(req, res)
     res.status(502).json({ ok: false, error: `Proxy to backend failed: ${msg}` })
   }
 }
